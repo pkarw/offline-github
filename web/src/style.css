@@ -1212,3 +1212,139 @@ input:focus, .search:focus-within, button:focus-visible, a:focus-visible { outli
 .checkout { background: #171b14; border-color: #35452b; }
 .checkout code { color: #d0e6bd; }
 .diff-hunk { background: #262626; color: #d4d4d4; }
+
+/* Durable outgoing intentions remain visibly distinct from the GitHub cache. */
+.queue-actions,
+.queue-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.queue-actions h2 {
+  margin-right: auto;
+}
+.queue-card,
+.queued-field {
+  border: 1px solid #3b3b3b;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  background: #191919;
+  overflow-wrap: anywhere;
+}
+.queue-card small {
+  color: #aaa;
+}
+.queue-marker {
+  font-size: 11px;
+  border: 1px solid #777;
+  border-radius: 20px;
+  padding: 3px 8px;
+  color: #ddd;
+  white-space: nowrap;
+}
+.queue-conflict,
+.queue-failed {
+  color: #ffb0b5;
+  border-color: #b65d66;
+}
+.queue-uncertain {
+  color: #f5d394;
+  border-color: #a88c56;
+}
+.queue-applied {
+  color: #afe793;
+  border-color: #638b4d;
+}
+.queue-sending {
+  color: #b5d9ff;
+  border-color: #688eb4;
+}
+.conflict-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.queue-card pre,
+.queued-field pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  background: #111;
+  padding: 12px;
+  max-height: 260px;
+  overflow: auto;
+}
+.queue-card summary {
+  cursor: pointer;
+  margin-top: 15px;
+  padding: 8px 0;
+}
+.audit-row {
+  border-top: 1px solid #333;
+  padding: 10px 0;
+  font-size: 11px;
+}
+.queue-dialog {
+  width: min(820px, calc(100% - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+}
+.queue-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-transform: capitalize;
+}
+textarea,
+select {
+  background: #151515;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+}
+textarea {
+  min-height: 120px;
+  resize: vertical;
+  width: 100%;
+}
+.composer {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.composer .button {
+  justify-self: end;
+}
+.local-comment {
+  border-style: dashed;
+  border-color: #657551;
+}
+.local-body {
+  white-space: pre-wrap;
+  padding: 20px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.section-tabs {
+  overflow-x: auto;
+}
+.section-tabs > button {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .conflict-grid {
+    grid-template-columns: 1fr;
+  }
+  .queue-actions .button {
+    min-height: 42px;
+  }
+  .queue-dialog {
+    padding: 20px;
+  }
+}
