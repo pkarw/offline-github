@@ -339,7 +339,7 @@ pub async fn serve(
         .route("/api/repos/{o}/{r}/items/{n}", get(detail))
         .route("/api/repos/{o}/{r}/tree", get(tree))
         .route("/api/repos/{o}/{r}/blob", get(blob))
-        .fallback_service(ServeDir::new(web).not_found_service(ServeFile::new(index)))
+        .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
         .with_state(store)
         .layer(middleware::from_fn(guard));
     let listener = bind(port).await?;

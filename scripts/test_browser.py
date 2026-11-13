@@ -31,6 +31,8 @@ try:
    if server.poll() is not None:raise RuntimeError((fixture.d/'server.log').read_text())
    time.sleep(.1)
  else:raise RuntimeError('Fixture server never became healthy')
+ with urllib.request.urlopen(url+'/test/repo/issues/1',timeout=5) as response:
+  assert response.status==200 and 'id="root"' in response.read().decode()
  env=dict(fixture.env,OGH_TEST_URL=url,OGH_TEST_DIR=str(fixture.d),OGH_TEST_ARTIFACTS=os.environ.get('OGH_TEST_ARTIFACTS',str(fixture.d/'browser')))
  result=subprocess.run(['node',str(root/'scripts/browser-smoke.cjs')],env=env,timeout=120)
  if result.returncode:raise RuntimeError('Browser smoke failed')

@@ -109,8 +109,8 @@ fi
 # Apple Silicon users need no Rust build. Validate the release checksum before installation.
 if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ]; then
   bundle="$(mktemp -d "$OGH_SETUP_ROOT/bundle.XXXXXX")"
-  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.5/offline-github-macos-arm64.tgz
-  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.5/SHA256SUMS.txt
+  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.6/offline-github-macos-arm64.tgz
+  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.6/SHA256SUMS.txt
   expected="$(awk '$2 == "offline-github-macos-arm64.tgz" {print $1}' "$bundle/SHA256SUMS.txt")"
   actual="$(shasum -a 256 "$bundle/app.tgz" | awk '{print $1}')"
   [ -n "$expected" ] && [ "$actual" = "$expected" ] || { echo 'Bundle checksum mismatch' >&2; exit 1; }
