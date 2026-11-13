@@ -28,7 +28,18 @@ def install_helper(path, content):
     os.replace(temporary, path)
 
 
-def finish(workspace, root, port):
+def open_browser(url):
+    """Open only after readiness; report failures instead of silently ignoring them."""
+    command = ['/usr/bin/open', url] if sys.platform == 'darwin' else ['xdg-open', url]
+    print(f'🌐 Opening your browser: {url}', flush=True)
+    try:
+        subprocess.run(command, check=True, timeout=15, stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f'⚠️ Browser could not open automatically ({error}). Open {url} manually.', file=sys.stderr)
+
+
+def finish(workspace, root, port, browser='0'):
     workspace, root = Path(workspace), Path(root)
     port = int(port)
     if not 1 <= port <= 65535:
@@ -65,6 +76,8 @@ def finish(workspace, root, port):
     if healthy():
         receipt.write_text(url)
         print(f'Reusing existing ogh server at {url}.')
+        if browser == '1':
+            open_browser(url)
         return
     receipt.unlink(missing_ok=True)
     with (root / 'server.log').open('ab') as log:
@@ -77,6 +90,8 @@ def finish(workspace, root, port):
             url = receipt.read_text().strip()
         if receipt.exists() and healthy():
             print(f'Started ogh server (PID {process.pid}, log {root / "server.log"}).')
+            if browser == '1':
+                open_browser(url)
             return
         if process.poll() is not None:
             break

@@ -156,3 +156,9 @@ Repositories, settings, cached UI and outgoing changes live under `~/.offline-gi
 Use **Pull from GitHub** to fetch incoming changes. **Push changes** previews only outgoing changes and requires confirmation; a zero outgoing count says nothing about incoming changes. Issues and pull requests can both be filtered by label.
 
 **Remove offline repo** checks queued outgoing changes, uncommitted files and local commits against the last cached remote refs. It removes the project from the app list while retaining all files and recovery history. Export JSON or Markdown before removal if desired. Add the same repository again to restore its listing. This does not delete GitHub repositories or reclaim disk space.
+
+If a previous checkout folder was deleted, setup recovers its missing, unlocked
+Git worktree registration at the selected destination. Existing folders and locked
+worktrees are preserved. Rerun the installer with the same folder to finish setup.
+The browser opens only after the server is ready, using its actual port. If the
+desktop opener fails, setup prints the URL and a warning; `--no-open` disables it.

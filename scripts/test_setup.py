@@ -19,6 +19,11 @@ finish = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(finish)
 
 
+spec = importlib.util.spec_from_file_location('worktree', ROOT / 'scripts/setup/worktree.py')
+worktree = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(worktree)
+
+
 class SetupTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ogh-setup-test-')
@@ -111,6 +116,44 @@ class SetupTests(unittest.TestCase):
             self.assertIn("export OGH_DATA_DIR='" + cache + "'", helper)
             self.assertEqual((self.root / 'state/server.url').read_text(), 'http://127.0.0.1:4181')
             self.assertFalse((self.root / 'state/server.pid').exists())
+
+    def test_browser_opens_ready_actual_url_and_respects_opt_out(self):
+        import io
+        cache = str(self.root / 'cache')
+        state = self.root / 'state'
+        state.mkdir()
+        ready = {'status': 'ok', 'outgoing_queue': True, 'desktop_launch': True,
+                 'separate_pull_push': True, 'data_dir': cache}
+        process = Mock(pid=123)
+        process.poll.return_value = None
+        def launch(*args, **kwargs):
+            self.assertIn('--no-browser', args[0])  # installer opens once, after readiness
+            (state / 'server.url').write_text('http://127.0.0.1:52970')
+            return process
+        def health(url, **kwargs):
+            if ':4173/' in url:
+                raise OSError('occupied by another app')
+            return io.BytesIO(json.dumps(ready).encode())
+        with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}), \
+                patch('urllib.request.urlopen', side_effect=health), \
+                patch.object(finish.subprocess, 'Popen', side_effect=launch), \
+                patch.object(finish, 'open_browser') as browser:
+            finish.finish(self.work, state, 4173, '1')
+            browser.assert_called_once_with('http://127.0.0.1:52970')
+            browser.reset_mock()
+            finish.finish(self.work, state, 52970, '0')
+            browser.assert_not_called()
+            finish.finish(self.work, state, 52970, '1')
+            browser.assert_called_once_with('http://127.0.0.1:52970')
+
+    def test_browser_failure_has_visible_manual_url(self):
+        import io
+        with patch.object(finish.sys, 'platform', 'darwin'), \
+                patch.object(finish.subprocess, 'run', side_effect=OSError('no desktop')) as run, \
+                patch('sys.stderr', new_callable=io.StringIO) as errors:
+            finish.open_browser('http://127.0.0.1:52970')
+            self.assertEqual(run.call_args.args[0], ['/usr/bin/open', 'http://127.0.0.1:52970'])
+            self.assertIn('Open http://127.0.0.1:52970 manually', errors.getvalue())
 
     def test_rapid_reconfiguration_backups_never_collide(self):
         with patch.object(configure.time, 'strftime', return_value='fixed-clock'):
@@ -210,6 +253,34 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(paths['data_dir'], str(home / '.offline-github'))
         self.assertEqual((home / '.offline-github/keep.txt').read_text(), 'retained')
         self.assertTrue(legacy.exists())
+
+    def test_missing_worktree_recovery_preserves_other_work_and_locks(self):
+        import shutil
+        mirror = self.root / 'source'
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(mirror), *args], text=True, timeout=30)
+        subprocess.run(['git', 'init', str(mirror)], check=True, capture_output=True, timeout=30)
+        git('config', 'user.name', 'Fixture')
+        git('config', 'user.email', 'fixture@example.test')
+        (mirror / 'file.txt').write_text('committed')
+        git('add', '.')
+        git('commit', '-m', 'fixture')
+        missing = self.root / "missing ' checkout"
+        other = self.root / 'other checkout'
+        git('worktree', 'add', '--detach', str(missing), 'HEAD')
+        git('worktree', 'add', '--detach', str(other), 'HEAD')
+        (other / 'precious.txt').write_text('uncommitted work')
+        shutil.rmtree(missing)
+        worktree.create(mirror / '.git', missing, 'HEAD')
+        self.assertEqual((missing / 'file.txt').read_text(), 'committed')
+        self.assertEqual((other / 'precious.txt').read_text(), 'uncommitted work')
+        with self.assertRaisesRegex(RuntimeError, 'Preserving existing'):
+            worktree.create(mirror / '.git', other, 'HEAD')
+        git('worktree', 'lock', str(missing))
+        shutil.rmtree(missing)
+        with self.assertRaisesRegex(RuntimeError, 'locked'):
+            worktree.create(mirror / '.git', missing, 'HEAD')
+        self.assertIn('locked', git('worktree', 'list', '--porcelain'))
 
     def test_shell_syntax(self):
         for script in ('setup.sh', 'sandbox.sh'):

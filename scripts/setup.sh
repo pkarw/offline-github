@@ -152,7 +152,7 @@ PYREPO
 else
   base="$(ogh repo view -R "$OGH_SETUP_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
   mkdir -p "$(dirname "$OGH_WORKSPACE")"
-  git --git-dir="$mirror" worktree add --detach "$OGH_WORKSPACE" "origin/$base"
+  python3 "$source_dir/scripts/setup/worktree.py" "$mirror" "$OGH_WORKSPACE" "origin/$base"
   git -C "$OGH_WORKSPACE" switch -c "offline/work-$(date +%Y%m%d-%H%M%S)-$$"
 fi
 skills_dir="$OGH_SETUP_ROOT/skills"
@@ -163,12 +163,9 @@ fi
 echo '🤖 Installing project skills for ogh…'
 python3 "$source_dir/scripts/setup/configure.py" "$OGH_WORKSPACE" "$skills_dir" "$source_dir" --repo "$OGH_SETUP_REPO"
 # Helper enters the project, exports PATH/repo, then starts an interactive user shell.
-python3 "$source_dir/scripts/setup/finish.py" "$OGH_WORKSPACE" "$OGH_SETUP_ROOT" "$OGH_SETUP_PORT"
+python3 "$source_dir/scripts/setup/finish.py" "$OGH_WORKSPACE" "$OGH_SETUP_ROOT" "$OGH_SETUP_PORT" "$OGH_SETUP_OPEN"
 app_url="$(cat "$OGH_SETUP_ROOT/server.url")"
-if [ "$OGH_SETUP_OPEN" = 1 ]; then
-  if command -v open >/dev/null; then open "$app_url" || true
-  elif command -v xdg-open >/dev/null; then xdg-open "$app_url" || true; fi
-fi
+
 printf '\n✅ Ready! App: %s\nProject: %s\n' "$app_url" "$OGH_WORKSPACE"
 echo 'Start pi, codex or claude here. Project skills use ogh; gh remains available for explicit online sync.'
 echo 'Project application dependencies/services are separate; follow its README to run the application.'
