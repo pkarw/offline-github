@@ -4,3 +4,8 @@ node_modules/
 !.env.example
 .DS_Store
 *.log
+/target/
+/data/
+/web/dist/
+/playwright-report/
+/test-results/
