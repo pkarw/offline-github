@@ -64,6 +64,7 @@ def finish(workspace, root, port):
         print(f'Reusing existing ogh server on {port}.')
         return
     with socket.socket() as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(('127.0.0.1', port))  # Refuse to replace an unrelated listener.
     root.mkdir(parents=True, exist_ok=True)
     with (root / 'server.log').open('ab') as log:

@@ -3,7 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
-cargo test --locked
+# Subprocess tests fork; serialize to avoid inheriting another test's flock FD.
+cargo test --locked -- --test-threads=1
 cargo build --locked
 python3 scripts/smoke.py
 python3 scripts/test_outbox.py
