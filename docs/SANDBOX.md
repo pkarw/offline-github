@@ -6,6 +6,24 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/sandbox.sh)
 ```
 
+📂 **Before installing anything**, the launcher shows the guest project folder,
+persistent disk, host helper and browser URL. It prompts for a folder name;
+press **Enter** to keep `open-mercato-offline`, or type your own.
+
+```bash
+# Choose the guest folder directly (no folder prompt):
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/sandbox.sh) --folder "My Mercato"
+
+# Preview paths only — no downloads, installs or VM changes:
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/sandbox.sh) --folder "My Mercato" --plan
+```
+
+Folders live at `/root/Projects/NAME` **inside the VM**. Names may contain
+letters, digits, spaces, dots, dashes and underscores, and must start with a
+letter or digit. `-d` is shorthand for `--folder`; `OGH_SANDBOX_FOLDER` sets the
+default. Use `--no-prompt` for automation or `--interactive` to force the prompt.
+The generated `ogh-sandbox` helper remembers the selected guest folder.
+
 This installs Microsandbox if absent, checks its host prerequisites, creates a
 persistent **local** microVM, installs the same ogh/Open Mercato/skills setup
 inside it, and opens the project shell. Sign into GitHub **inside the guest**

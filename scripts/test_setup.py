@@ -86,7 +86,7 @@ class SetupTests(unittest.TestCase):
 
     def test_sandbox_helper_preserves_symlink_target(self):
         script = (ROOT / 'scripts/sandbox.sh').read_text()
-        block = script[script.index('mkdir -p "$HOME/.local/bin"'):script.index('echo "Ready:')]
+        block = script[script.index('mkdir -p "$HOME/.local/bin"'):script.index('echo "✅ Ready:')]
         folder = self.root / '.local/bin'
         folder.mkdir(parents=True)
         helper = folder / 'ogh-sandbox'
@@ -94,7 +94,7 @@ class SetupTests(unittest.TestCase):
         target.write_text('keep me')
         helper.symlink_to(target)
         subprocess.run(['bash', '-eu', '-c', block], check=True, timeout=10,
-                       env=dict(os.environ, HOME=str(self.root), OGH_SANDBOX_NAME='test', OGH_SANDBOX_PORT='4183'))
+                       env=dict(os.environ, HOME=str(self.root), OGH_SANDBOX_NAME='test', OGH_SANDBOX_PORT='4183', OGH_GUEST_WORKSPACE='/root/Projects/My Mercato'))
         self.assertEqual(target.read_text(), 'keep me')
         self.assertFalse(helper.is_symlink())
         self.assertTrue(next(folder.glob('ogh-sandbox.backup.*/ogh-sandbox')).is_symlink())
@@ -118,6 +118,56 @@ class SetupTests(unittest.TestCase):
             for _ in range(4):
                 self.run_config()
         self.assertEqual(len(list((self.work / '.ai/ogh-skills').glob('*.ogh-backup-*'))), 3)
+
+    def test_installer_folder_plans_and_interactive_edit(self):
+        for script in ('setup.sh', 'sandbox.sh'):
+            path = str(ROOT / 'scripts' / script)
+            plan_home = self.root / ('plan-' + script)
+            plan_home.mkdir()
+            result = subprocess.run(['bash', path, '--folder', 'My Mercato', '--plan'],
+                                    capture_output=True, text=True, check=True, timeout=10,
+                                    env=dict(os.environ, HOME=str(plan_home)))
+            self.assertEqual(list(plan_home.iterdir()), [])
+            self.assertIn('/Projects/My Mercato', result.stdout)
+            self.assertIn('📂', result.stdout)
+            result = subprocess.run(['bash', path, '--interactive', '--plan'], input='Flight Work\n',
+                                    capture_output=True, text=True, check=True, timeout=10)
+            self.assertIn('/Projects/Flight Work', result.stdout)
+            result = subprocess.run(['bash', path, '--interactive', '--plan'], input='',
+                                    capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('cancelled before installation', result.stderr)
+            for args in (['--folder'], ['--folder', '--plan']):
+                result = subprocess.run(['bash', path, *args], capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Missing --folder', result.stderr)
+        invalid = subprocess.run(['bash', str(ROOT / 'scripts/sandbox.sh'), '--folder', '../outside', '--plan'],
+                                 capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(invalid.returncode, 0)
+
+    def test_sandbox_folder_reaches_bootstrap_and_reentry(self):
+        # Exercise the whole launcher without virtualization, downloads or host writes.
+        bindir = self.root / '.microsandbox/bin'
+        bindir.mkdir(parents=True)
+        log = self.root / 'msb.jsonl'
+        msb = bindir / 'msb'
+        msb.write_text('#!' + os.sys.executable + '\nimport json,sys\n'
+                       + 'with open(' + repr(str(log)) + ', "a") as f: f.write(json.dumps(sys.argv[1:]) + "\\n")\n'
+                       + 'sys.exit(1 if sys.argv[1] == "inspect" else 0)\n')
+        msb.chmod(0o755)
+        opener = bindir / 'open'
+        opener.write_text('#!/bin/sh\nexit 0\n')
+        opener.chmod(0o755)
+        subprocess.run(['bash', str(ROOT / 'scripts/sandbox.sh'), '--folder', 'My Mercato'],
+                       env=dict(os.environ, HOME=str(self.root)), capture_output=True, text=True, check=True, timeout=15)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        bootstrap = next(call for call in calls if '--folder' in call)
+        self.assertEqual(bootstrap[bootstrap.index('--folder') + 1], '/root/Projects/My Mercato')
+        self.assertIn('--no-prompt', bootstrap)
+        helper = (self.root / '.local/bin/ogh-sandbox').read_text()
+        self.assertIn("--env 'OGH_WORKSPACE=/root/Projects/My Mercato'", helper)
+        self.assertIn('finish.py "$OGH_WORKSPACE"', helper)
+        subprocess.run(['bash', '-n', str(self.root / '.local/bin/ogh-sandbox')], check=True, timeout=10)
 
     def test_shell_syntax(self):
         for script in ('setup.sh', 'sandbox.sh'):

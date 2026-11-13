@@ -8,16 +8,46 @@ OGH_SETUP_PORT="${OGH_SETUP_PORT:-4173}"
 OGH_SETUP_SHELL=1
 OGH_SETUP_SYNC=1
 OGH_SETUP_OPEN=1
+OGH_SETUP_PROMPT=auto
+OGH_SETUP_PLAN=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    --folder|-d) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --folder value' >&2; exit 1; }; OGH_WORKSPACE="$2"; OGH_SETUP_PROMPT=off; shift ;;
+    --no-prompt) OGH_SETUP_PROMPT=off ;;
+    --interactive) OGH_SETUP_PROMPT=on ;;
+    --plan) OGH_SETUP_PLAN=1 ;;
     --no-shell) OGH_SETUP_SHELL=0 ;;
     --skip-sync) OGH_SETUP_SYNC=0 ;;
     --no-open) OGH_SETUP_OPEN=0 ;;
-    --help) echo 'Usage: bash setup.sh [--no-shell] [--no-open] [--skip-sync]'; exit 0 ;;
+    --help) printf '%s\n' 'Usage: bash setup.sh [--folder NAME|PATH] [--interactive|--no-prompt] [--plan]' '                     [--no-shell] [--no-open] [--skip-sync]' 'Bare folder names go under ~/Projects; paths containing / are relative to your current folder.' 'Interactive terminals prompt for the folder. --plan only shows destinations; installs nothing.'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
   shift
 done
+# Show the destination and let the user change it before any installation work.
+printf '\n🛫 Offline GitHub · local setup\n'
+printf '📂 Project folder: %s\n' "$OGH_WORKSPACE"
+if [ "$OGH_SETUP_PROMPT" = on ] || { [ "$OGH_SETUP_PROMPT" = auto ] && [ -t 0 ] && [ "$OGH_SETUP_PLAN" = 0 ]; }; then
+  printf '✏️  Project folder (Enter keeps the default): '
+  IFS= read -r chosen_folder || { echo 'Setup cancelled before installation.' >&2; exit 1; }
+  if [ -n "$chosen_folder" ]; then OGH_WORKSPACE="$chosen_folder"; fi
+fi
+case "$OGH_WORKSPACE" in
+  '~/'*) OGH_WORKSPACE="$HOME/${OGH_WORKSPACE#\~/}" ;;
+  /*) ;;
+  */*) OGH_WORKSPACE="$PWD/$OGH_WORKSPACE" ;;
+  *) OGH_WORKSPACE="$HOME/Projects/$OGH_WORKSPACE" ;;
+esac
+printf '📂 Install project and skills: %s\n' "$OGH_WORKSPACE"
+printf '🧰 Installer files: %s\n' "$OGH_SETUP_ROOT"
+printf '🔧 CLI: %s/.local/bin/ogh · reentry: %s/.local/bin/ogh-work\n' "$HOME" "$HOME"
+case "$(uname -s)" in
+  Darwin) display_cache="$HOME/Library/Application Support/offline-github" ;;
+  *) display_cache="${XDG_DATA_HOME:-$HOME/.local/share}/offline-github" ;;
+esac
+printf '💾 App cache and UI: %s\n' "${OGH_DATA_DIR:-$display_cache}"
+printf '🌐 Browser app: http://127.0.0.1:%s\n\n' "$OGH_SETUP_PORT"
+if [ "$OGH_SETUP_PLAN" = 1 ]; then exit 0; fi
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 mkdir -p "$OGH_SETUP_ROOT" "$HOME/.local/bin"
 # Install prerequisites using the host package manager, never an implicit sudo.
@@ -86,7 +116,7 @@ fi
 repo_record="$(ogh repo add open-mercato/open-mercato)"
 mirror="$(printf '%s' "$repo_record" | jq -r .path)"
 if [ "$OGH_SETUP_SYNC" = 1 ]; then
-  echo 'Downloading repository history and all issues/PRs; the first sync can take several minutes.'
+  echo '📥 Downloading repository history and all issues/PRs; the first sync can take several minutes.'
   ogh sync -R open-mercato/open-mercato
 fi
 if [ -e "$OGH_WORKSPACE" ]; then
@@ -103,11 +133,12 @@ skills_dir="$OGH_SETUP_ROOT/skills"
 if [ ! -d "$skills_dir/.git" ]; then
   git clone --depth 1 https://github.com/open-mercato/skills.git "$skills_dir"
 fi
+echo '🤖 Installing project skills for ogh…'
 python3 "$source_dir/scripts/setup/configure.py" "$OGH_WORKSPACE" "$skills_dir" "$source_dir"
 # Helper enters the project, exports PATH/repo, then starts an interactive user shell.
 python3 "$source_dir/scripts/setup/finish.py" "$OGH_WORKSPACE" "$OGH_SETUP_ROOT" "$OGH_SETUP_PORT"
 if [ "$OGH_SETUP_OPEN" = 1 ] && command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SETUP_PORT"; fi
-printf '\nReady. App: http://127.0.0.1:%s\nProject: %s\n' "$OGH_SETUP_PORT" "$OGH_WORKSPACE"
+printf '\n✅ Ready! App: http://127.0.0.1:%s\nProject: %s\n' "$OGH_SETUP_PORT" "$OGH_WORKSPACE"
 echo 'Start pi, codex or claude here. Project skills use ogh; gh remains available for explicit online sync.'
 echo 'Open Mercato application dependencies/services are separate; see its README when running the ERP itself.'
 if [ "$OGH_SETUP_SHELL" = 1 ]; then

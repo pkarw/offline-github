@@ -9,7 +9,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/sc
 ```
 
 Use Bash or Zsh to paste this command. The downloaded script runs in Bash. It
-opens a **new interactive shell** in `~/Projects/open-mercato-offline`, with
+first shows the project, CLI, cache and installer paths, then prompts for the
+project folder before making changes. Press **Enter** to keep the default, or
+type another name/path. After setup, it opens a **new interactive shell** in
+your chosen folder (default `~/Projects/open-mercato-offline`), with
 `OGH_REPO=open-mercato/open-mercato` and the CLI on PATH. `exit` returns to your
 original shell; `~/.local/bin/ogh-work` returns to the project later.
 
@@ -84,10 +87,22 @@ Detailed installation, manual builds, upgrades, queue commands and recovery are
 in the [app and CLI guide](GUIDE.md).
 
 ```bash
-# Choose another project folder and local browser port:
-OGH_WORKSPACE="$HOME/Projects/mercato-flight" OGH_SETUP_PORT=4180 \
-  bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh)
+# 📂 Choose a folder directly (skips the folder prompt):
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh) --folder mercato-flight
+
+# 👀 Preview every destination without installing anything:
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh) --folder "My Mercato" --plan
 ```
+
+A bare `--folder NAME` goes under `~/Projects`; an absolute path is used as
+given, and a path containing `/` is relative to your current directory. Quote
+names with spaces. `-d` is shorthand for `--folder`. `OGH_WORKSPACE` sets the
+default; `OGH_SETUP_PORT=4180` selects another browser port.
+
+Interactive terminals prompt automatically unless `--folder` was supplied.
+Use `--no-prompt` to accept the default in automation, or `--interactive` to
+force a folder prompt (including with `--plan`). End-of-input cancels a prompt
+before installation. The generated `ogh-work` helper remembers your folder.
 
 `OGH_SETUP_ROOT` selects the installer/tool source directory. `OGH_DATA_DIR`
 selects the application cache/outbox as usual; the helper retains its resolved path
