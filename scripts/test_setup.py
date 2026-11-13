@@ -105,7 +105,7 @@ class SetupTests(unittest.TestCase):
         def response(data_dir):
             return io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'data_dir': data_dir}).encode())
         with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}):
-            with patch('urllib.request.urlopen', return_value=response(cache)):
+            with patch('urllib.request.urlopen', side_effect=lambda url, **kw: response(cache) if url.endswith('/api/health') else io.BytesIO(b'{"tools":[],"workspaces":[]}')):
                 finish.finish(self.work, self.root / 'state', 4181)
             helper = (self.root / '.local/bin/ogh-work').read_text()
             self.assertIn("export OGH_DATA_DIR='" + cache + "'", helper)

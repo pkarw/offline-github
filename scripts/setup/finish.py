@@ -53,8 +53,13 @@ def finish(workspace, root, port):
         try:
             with urllib.request.urlopen(url + '/api/health', timeout=.5) as response:
                 data = json.load(response)
-            return (data.get('status') == 'ok' and data.get('outgoing_queue') is True
-                    and data.get('data_dir') == data_dir)
+            if not (data.get('status') == 'ok' and data.get('outgoing_queue') is True
+                    and data.get('data_dir') == data_dir):
+                return False
+            # An older server can serve the new UI files but lacks its launch API.
+            with urllib.request.urlopen(url + '/api/repos/' + repository + '/open', timeout=2) as response:
+                capabilities = json.load(response)
+            return isinstance(capabilities.get('tools'), list) and 'workspaces' in capabilities
         except (OSError, ValueError):
             return False
 
