@@ -1367,3 +1367,6 @@ textarea {
 .open-menu button:disabled { opacity:.45; cursor:default; }
 .open-menu button small { width:100%; font-size:11px; }
 .launch-message { width:100%; color:var(--muted-foreground); overflow-wrap:anywhere; }
+.transfer-buttons { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+
+.label-filter { max-width: 220px; min-width: 110px; background: var(--panel, #191919); color: inherit; border: 1px solid #383838; border-radius: 6px; padding: 8px; }

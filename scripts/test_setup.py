@@ -103,9 +103,9 @@ class SetupTests(unittest.TestCase):
         import io
         cache = str(self.root / 'custom cache')
         def response(data_dir):
-            return io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'data_dir': data_dir}).encode())
+            return io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'desktop_launch': True, 'separate_pull_push': True, 'data_dir': data_dir}).encode())
         with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}):
-            with patch('urllib.request.urlopen', side_effect=lambda url, **kw: response(cache) if url.endswith('/api/health') else io.BytesIO(b'{"tools":[],"workspaces":[]}')):
+            with patch('urllib.request.urlopen', side_effect=lambda url, **kw: response(cache) if url.endswith('/api/health') else io.BytesIO(b'{"tools":[],"workspaces":[],"separate_pull_push":true}')):
                 finish.finish(self.work, self.root / 'state', 4181)
             helper = (self.root / '.local/bin/ogh-work').read_text()
             self.assertIn("export OGH_DATA_DIR='" + cache + "'", helper)
@@ -166,9 +166,9 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(json.loads((self.work / '.ogh-workspace.json').read_text())['repository'], 'acme/widget')
         cache = str(self.root / 'cache')
         import io
-        response = io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'data_dir': cache}).encode())
+        response = io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'desktop_launch': True, 'separate_pull_push': True, 'data_dir': cache}).encode())
         with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}):
-            with patch('urllib.request.urlopen', return_value=response):
+            with patch('urllib.request.urlopen', side_effect=lambda *a, **kw: io.BytesIO(response.getvalue())):
                 finish.finish(self.work, self.root / 'state', 4181)
         self.assertIn('export OGH_REPO=acme/widget', (self.root / '.local/bin/ogh-work').read_text())
 
@@ -196,6 +196,20 @@ class SetupTests(unittest.TestCase):
         self.assertIn("--env 'OGH_WORKSPACE=/root/Projects/My Mercato'", helper)
         self.assertIn('finish.py "$OGH_WORKSPACE"', helper)
         subprocess.run(['bash', '-n', str(self.root / '.local/bin/ogh-sandbox')], check=True, timeout=10)
+
+    def test_default_storage_preserves_legacy_cache(self):
+        import platform
+        home = self.root / 'newhome'
+        home.mkdir()
+        legacy = home / ('Library/Application Support/offline-github' if platform.system() == 'Darwin' else '.local/share/offline-github')
+        legacy.mkdir(parents=True)
+        (legacy / 'keep.txt').write_text('retained')
+        env = dict(os.environ, HOME=str(home), XDG_DATA_HOME=str(home / '.local/share'))
+        env.pop('OGH_DATA_DIR', None)
+        paths = json.loads(subprocess.check_output([str(ROOT / 'target/debug/ogh'), 'app', 'paths'], env=env, text=True, timeout=15))
+        self.assertEqual(paths['data_dir'], str(home / '.offline-github'))
+        self.assertEqual((home / '.offline-github/keep.txt').read_text(), 'retained')
+        self.assertTrue(legacy.exists())
 
     def test_shell_syntax(self):
         for script in ('setup.sh', 'sandbox.sh'):

@@ -78,6 +78,54 @@ fn workspaces(store: &Store, repo: &str) -> Result<Vec<PathBuf>> {
     });
     Ok(paths)
 }
+pub fn removal_preview(store: &Store, repo: &str) -> Result<Value> {
+    store.load(repo)?;
+    let report = crate::outbox::report(store, Some(repo), None)?;
+    let outgoing = report["events"]
+        .as_array()
+        .map(|events| {
+            events
+                .iter()
+                .filter(|e| !matches!(e["status"].as_str(), Some("applied" | "cancelled")))
+                .count()
+        })
+        .unwrap_or(0);
+    let mut warnings = vec![];
+    match workspaces(store, repo) {
+        Ok(paths) => {
+            for path in paths {
+                match process::run(
+                    "git",
+                    &["-C", &path.to_string_lossy(), "status", "--porcelain"],
+                    30,
+                ) {
+                    Ok(status) if !status.trim().is_empty() => {
+                        warnings.push(format!("Uncommitted files in {}", path.display()))
+                    }
+                    Err(e) => warnings.push(format!("Could not inspect {}: {e}", path.display())),
+                    _ => {}
+                }
+            }
+        }
+        Err(e) => warnings.push(format!("Could not inspect worktrees: {e}")),
+    }
+    if store.mirror(repo)?.exists() {
+        match process::git(
+            &store.mirror(repo)?,
+            &["rev-list", "--count", "--branches", "--not", "--remotes"],
+        ) {
+            Ok(count) if count.trim() != "0" => warnings.push(format!(
+                "{} local commits are absent from cached remote branches (last pull only)",
+                count.trim()
+            )),
+            Err(e) => warnings.push(format!("Could not inspect local commits: {e}")),
+            _ => {}
+        }
+    }
+    Ok(
+        json!({"outgoing_count":outgoing,"warnings":warnings,"retained_path":store.dir(repo)?,"retains_all_data":true}),
+    )
+}
 pub fn context(store: &Store, repo: &str) -> Result<Value> {
     store.load(repo)?;
     let paths = workspaces(store, repo)?;
@@ -106,7 +154,7 @@ pub fn context(store: &Store, repo: &str) -> Result<Value> {
     })
     .collect();
     Ok(
-        json!({"path":path,"workspaces":paths,"checkout_exists":!paths.is_empty(),"cache_path":store.mirror(repo)?,"tools":tools}),
+        json!({"separate_pull_push":true,"path":path,"workspaces":paths,"checkout_exists":!paths.is_empty(),"cache_path":store.mirror(repo)?,"tools":tools}),
     )
 }
 fn quote(value: &str) -> String {

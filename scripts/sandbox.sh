@@ -50,7 +50,7 @@ OGH_GUEST_WORKSPACE="/root/Projects/$OGH_SANDBOX_FOLDER"
 [[ "$OGH_SETUP_REF" =~ ^[a-zA-Z0-9._/-]+$ ]] || { echo 'Invalid source ref' >&2; exit 1; }
 printf '📂 Install project and skills: %s (inside VM %s)\n' "$OGH_GUEST_WORKSPACE" "$OGH_SANDBOX_NAME"
 printf '💾 Persistent guest disk: %s-home → /root\n' "$OGH_SANDBOX_NAME"
-printf '🧰 Guest tools/cache: /root/.local/share · CLI: /root/.local/bin/ogh\n'
+printf '🧰 Guest app storage: /root/.offline-github · CLI: /root/.local/bin/ogh\n'
 printf '🔧 Microsandbox on host: existing msb or %s/.microsandbox/bin/msb\n' "$HOME"
 printf '🔑 Reentry on host: %s/.local/bin/ogh-sandbox\n' "$HOME"
 printf '🌐 Browser app on host: http://127.0.0.1:%s\n' "$OGH_SANDBOX_PORT"
@@ -64,7 +64,7 @@ if ! command -v msb >/dev/null; then
 fi
 echo '🔍 Checking Microsandbox…'
 msb doctor
-state_dir="$HOME/.local/share/ogh-sandbox"
+state_dir="$HOME/.offline-github/sandbox"
 mkdir -p "$state_dir"
 receipt="$state_dir/$OGH_SANDBOX_NAME.port"
 # inspect is local metadata; never replace or remove an existing VM/volume.
@@ -95,14 +95,14 @@ msb exec --timeout 60m "$OGH_SANDBOX_NAME" -- bash -c '
   apt-get update
   apt-get install -y gh jq python3 curl ca-certificates build-essential pkg-config libssl-dev socat
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-  mkdir -p /root/.local/share/ogh-setup
-  curl -fsSL "https://raw.githubusercontent.com/pkarw/offline-github/'"$OGH_SETUP_REF"'/scripts/setup.sh" -o /root/.local/share/ogh-setup/bootstrap.sh
+  mkdir -p /root/.offline-github/setup
+  curl -fsSL "https://raw.githubusercontent.com/pkarw/offline-github/'"$OGH_SETUP_REF"'/scripts/setup.sh" -o /root/.offline-github/setup/bootstrap.sh
 '
 # Install/login remains interactive; GitHub credentials are entered inside the guest only.
 msb exec --tty --env "OGH_SETUP_REF=$OGH_SETUP_REF" --env OGH_SETUP_PORT=4174 "$OGH_SANDBOX_NAME" -- \
-  bash /root/.local/share/ogh-setup/bootstrap.sh --repo "$OGH_SETUP_REPO" --folder "$OGH_GUEST_WORKSPACE" --no-prompt --no-shell --no-open
+  bash /root/.offline-github/setup/bootstrap.sh --repo "$OGH_SETUP_REPO" --folder "$OGH_GUEST_WORKSPACE" --no-prompt --no-shell --no-open
 # Raw TCP relay preserves localhost Host/Origin checks from the browser.
-msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:$(cat /root/.local/share/ogh-setup/server.url | sed "s/.*://")'
+msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:$(cat /root/.offline-github/setup/server.url | sed "s/.*://")'
 mkdir -p "$HOME/.local/bin"
 launcher="$HOME/.local/bin/ogh-sandbox"
 # Values have been validated before embedding in shell source.
@@ -112,8 +112,8 @@ cat > "$temporary" <<EOF
 set -euo pipefail
 export PATH="\$HOME/.microsandbox/bin:/opt/homebrew/bin:\$PATH"
 msb ping '$OGH_SANDBOX_NAME' >/dev/null 2>&1 || msb start '$OGH_SANDBOX_NAME'
-msb exec --tty --env 'OGH_WORKSPACE=$OGH_GUEST_WORKSPACE' '$OGH_SANDBOX_NAME' -- bash -c 'export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:\$PATH"; python3 /root/.local/share/ogh-setup/offline-github/scripts/setup/finish.py "\$OGH_WORKSPACE" /root/.local/share/ogh-setup 4174'
-msb exec --detach '$OGH_SANDBOX_NAME' -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:\$(cat /root/.local/share/ogh-setup/server.url | sed "s/.*://")'
+msb exec --tty --env 'OGH_WORKSPACE=$OGH_GUEST_WORKSPACE' '$OGH_SANDBOX_NAME' -- bash -c 'export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:\$PATH"; python3 /root/.offline-github/setup/offline-github/scripts/setup/finish.py "\$OGH_WORKSPACE" /root/.offline-github/setup 4174'
+msb exec --detach '$OGH_SANDBOX_NAME' -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:\$(cat /root/.offline-github/setup/server.url | sed "s/.*://")'
 exec msb exec --tty '$OGH_SANDBOX_NAME' -- bash /root/.local/bin/ogh-work
 EOF
 chmod +x "$temporary"

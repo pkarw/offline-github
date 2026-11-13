@@ -5,6 +5,8 @@ import * as Tabs from "@radix-ui/react-tabs";
 import {
   Plus,
   RefreshCw,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Search,
   GitPullRequest,
   CircleDot,
@@ -37,6 +39,7 @@ import {
   type Comment,
 } from "./api";
 import "./style.css";
+import { RepoRemove } from "./repo-remove";
 import { RepoOpen } from "./repo-open";
 import {
   Outgoing,
@@ -111,11 +114,14 @@ function App() {
     [items, setItems] = useState<Item[]>([]),
     [state, setState] = useState("open"),
     [query, setQuery] = useState(""),
+    [label, setLabel] = useState(""),
+    [labels, setLabels] = useState<string[]>([]),
     [number, setNumber] = useState<number | null>(null),
     [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [syncing, setSyncing] = useState(false),
+    [pulling, setPulling] = useState(false),
     [notice, setNotice] = useState(""),
     [noticeWarning, setNoticeWarning] = useState(false),
     [version, setVersion] = useState(0),
@@ -139,12 +145,14 @@ function App() {
     const timer = window.setInterval(load, syncing ? 1500 : 5000);
     return () => { current = false; window.clearInterval(timer); };
   }, [selected, version, syncing]);
+  useEffect(() => { setLabel(""); setLabels([]); }, [selected]);
+  useEffect(() => { if (!selected) return; let current = true; api<string[]>(repoUrl(selected) + "/labels").then(v => { if (current) setLabels(v); }).catch(e => { if (current) setError(e.message); }); return () => { current = false; }; }, [selected, version]);
   const outgoingCount = outbox.events.filter(pending).length;
   const repo = repos.find((r) => r.full_name === selected);
   async function loadRepos() {
     const data = await api<Repo[]>("/api/repos");
     setRepos(data);
-    setSelected((s) => s || data[0]?.full_name || "");
+    setSelected((s) => data.some(r => r.full_name === s) ? s : data[0]?.full_name || "");
   }
   useEffect(() => {
     loadRepos()
@@ -158,7 +166,7 @@ function App() {
     setError("");
     const t = setTimeout(() => {
       api<Item[]>(
-        `${repoUrl(selected)}/items?${new URLSearchParams({ kind: page, state, q: query })}`,
+        `${repoUrl(selected)}/items?${new URLSearchParams({ kind: page, state, q: query, label })}`,
       )
         .then((d) => {
           if (current) setItems(d);
@@ -174,7 +182,7 @@ function App() {
       current = false;
       clearTimeout(t);
     };
-  }, [selected, page, state, query, version]);
+  }, [selected, page, state, query, label, version]);
   useEffect(() => {
     if (!selected || number === null) {
       setDetail(null);
@@ -198,6 +206,16 @@ function App() {
       current = false;
     };
   }, [selected, number, version]);
+  async function pull() {
+    if (!selected) return;
+    setPulling(true); setError(""); setNotice(""); setNoticeWarning(false);
+    try {
+      await api(repoUrl(selected) + "/sync", { method: "POST", body: "{}" });
+      setNotice("Pull completed. Your local copy is up to date; outgoing changes were not sent.");
+      await loadRepos(); refreshOutbox();
+    } catch (error) { setError((error as Error).message); }
+    finally { setPulling(false); }
+  }
   async function sync() {
     if (!selected) return;
     setSyncing(true);
@@ -225,16 +243,11 @@ function App() {
     try {
       const result = await api<Outbox>("/api/outbox/sync", {
         method: "POST",
-        body: JSON.stringify({ repo: previewRepo, plan_token: preview?.plan_token }),
+        body: JSON.stringify({ repo: previewRepo, plan_token: preview?.plan_token, pull: false }),
       });
       const remaining = result.events.filter(pending).length;
-      const errors =
-        result.incoming_errors &&
-        Object.keys(result.incoming_errors as object).length > 0;
-      setNoticeWarning(remaining > 0 || Boolean(errors));
-      setNotice(
-        `${remaining ? `${remaining} outgoing changes remain unresolved.` : "Outgoing changes reconciled."}${errors ? ` Cache refresh errors: ${JSON.stringify(result.incoming_errors)}` : " Incoming refresh completed."}`,
-      );
+      setNoticeWarning(remaining > 0);
+      setNotice(remaining ? `${remaining} outgoing changes remain unresolved.` : "Push completed. Outgoing changes reconciled. Pull separately to download GitHub updates.");
       setPreview(null);
       await loadRepos();
       refreshOutbox();
@@ -263,7 +276,7 @@ function App() {
       setAddOpen(false);
       setNewRepo("");
       setNoticeWarning(false);
-      setNotice("Repository added. Sync it to download a local copy.");
+      setNotice("Repository added. Pull from GitHub to download a local copy.");
     } catch (e) {
       setAddError((e as Error).message);
     } finally {
@@ -377,18 +390,20 @@ function App() {
               </p>
             </div>
             <div className="sync-group">
-              <Button onClick={sync} disabled={!selected || syncing}>
-                <RefreshCw size={15} className={syncing ? "spin" : ""} />
-                {syncing ? "Syncing repository…" : "Preview sync"}
-              </Button>
-              <small>
-                {syncing
-                  ? "Preparing / syncing changes. This may take a moment."
-                  : `Last synced ${date(repo?.last_sync)}`}
-              </small>
+              <div className="transfer-buttons">
+                <Button variant="outline" onClick={pull} disabled={!selected || syncing || pulling}>
+                  <ArrowDownToLine size={15} className={pulling ? "spin" : ""} />
+                  {pulling ? "Pulling…" : "Pull from GitHub"}
+                </Button>
+                <Button onClick={sync} disabled={!selected || syncing || pulling}>
+                  <ArrowUpFromLine size={15} />
+                  {syncing ? "Preparing push…" : "Push changes"}
+                </Button>
+              </div>
+              <small>{pulling ? "Checking GitHub for incoming changes…" : `Last pulled ${date(repo?.last_sync)}`}</small>
             </div>
           </div>
-          {selected && <RepoOpen key={selected} repo={selected} version={version} />}
+          {selected && <><RepoOpen key={selected} repo={selected} version={version} /><RepoRemove key={"remove-"+selected} repo={selected} onRemoved={async () => { setNumber(null); setItems([]); await loadRepos(); refreshOutbox(); }} /></>}
           {error && <ErrorBox error={error} />}
           {notice && (
             <div className={noticeWarning ? "notice notice-warning" : "notice"} role={noticeWarning ? "alert" : "status"}>
@@ -402,7 +417,7 @@ function App() {
                 loading ? "Loading workspace…" : "Your workspace starts here"
               }
             >
-              Add a GitHub repository, then sync to take issues, pull requests
+              Add a GitHub repository, then pull to take issues, pull requests
               and code with you.
               <br />
               <Button variant="default" onClick={() => setAddOpen(true)}>
@@ -442,7 +457,7 @@ function App() {
                   );
                 })}
                 <span className="cache-note">
-                  <WifiOff size={13} /> Available offline after sync
+                  <WifiOff size={13} /> Available offline after pull
                 </span>
               </div>
               {page === "outgoing" ? (
@@ -514,6 +529,7 @@ function App() {
                         </button>
                       ))}
                     </div>
+                    <select className="label-filter" aria-label="Filter by label" value={label} onChange={e => setLabel(e.target.value)}><option value="">All labels</option>{labels.map(name => <option key={name} value={name}>{name}</option>)}</select>
                     <label className="search">
                       <Search size={16} />
                       <input
@@ -543,7 +559,7 @@ function App() {
                       >
                         {query
                           ? "Try a different search or status."
-                          : "Sync this repository to download its latest issues and pull requests."}
+                          : "Pull from GitHub to download its latest issues and pull requests."}
                       </Empty>
                     ) : (
                       items.map((i) => (
@@ -616,7 +632,7 @@ function App() {
                       {items.length} cached{" "}
                       {page === "pr" ? "pull requests" : "issues"}
                     </span>
-                    <span>Changes are downloaded only when you sync.</span>
+                    <span>Pull downloads updates. Push sends reviewed local changes.</span>
                   </div>
                 </>
               )}
@@ -640,10 +656,10 @@ function App() {
         <Dialog.Portal>
           <Dialog.Overlay className="dialog-overlay" />
           <Dialog.Content className="dialog-content queue-dialog">
-            <Dialog.Title>Sync preview · {previewRepo}</Dialog.Title>
+            <Dialog.Title>Push preview · {previewRepo}</Dialog.Title>
             <Dialog.Description>
               Review saved changes below. Confirming sends queued work to
-              GitHub, then downloads incoming changes. Conflicts remain queued
+              GitHub. Incoming changes are downloaded separately with Pull. Conflicts remain queued
               for your decision.
             </Dialog.Description>
             {preview?.events.filter(pending).map((e) => (
@@ -658,7 +674,7 @@ function App() {
             ))}
             {!preview?.events.some(pending) && (
               <p>
-                No outgoing changes. This sync only downloads incoming changes.
+                No outgoing changes to push. Use Pull from GitHub to check for incoming changes.
               </p>
             )}
             {error && <ErrorBox error={error} />}
@@ -666,10 +682,10 @@ function App() {
               <Button disabled={syncing} onClick={() => setPreview(null)}>
                 Cancel
               </Button>
-              <Button disabled={syncing} onClick={executeSync}>
+              <Button disabled={syncing || !preview?.events.some(pending)} onClick={executeSync}>
                 {syncing
-                  ? "Syncing…"
-                  : `Sync ${preview?.events.filter(pending).length || 0} changes`}
+                  ? "Pushing…"
+                  : `Push ${preview?.events.filter(pending).length || 0} outgoing changes`}
               </Button>
             </div>
           </Dialog.Content>

@@ -6,13 +6,14 @@ cargo clippy --all-targets -- -D warnings
 # Subprocess tests fork; serialize to avoid inheriting another test's flock FD.
 cargo test --locked -- --test-threads=1
 cargo build --locked
+# Server integration tests require built frontend assets on clean checkouts.
+npm --prefix web ci
+npm --prefix web run build
 python3 scripts/smoke.py
 python3 scripts/test_outbox.py
 python3 scripts/test_cli.py
 python3 scripts/test_setup.py
 python3 scripts/test_launcher.py
-npm --prefix web ci
-npm --prefix web run build
 
 if [ "${OGH_BROWSER_TESTS:-0}" = "1" ]; then
   web/node_modules/.bin/playwright install --with-deps chromium

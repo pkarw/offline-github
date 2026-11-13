@@ -1,0 +1,11 @@
+import React, { useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { api, repoUrl } from "./api";
+import { Button } from "./ui";
+type Preview = { outgoing_count: number; warnings: string[]; retained_path: string };
+export function RepoRemove({ repo, onRemoved }: { repo: string; onRemoved: () => Promise<void> }) {
+  const [open, setOpen] = useState(false), [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  async function inspect() { setOpen(true); setPreview(null); setError(""); try { setPreview(await api<Preview>(repoUrl(repo) + "/remove")); } catch(e) { setError((e as Error).message); } }
+  async function remove() { setBusy(true); try { await api(repoUrl(repo) + "/remove", { method: "POST", body: JSON.stringify({ confirm: true }) }); await onRemoved(); setOpen(false); } catch(e) { setError((e as Error).message); } finally { setBusy(false); } }
+  return <><Button variant="ghost" onClick={inspect}>Remove offline repo</Button><Dialog.Root open={open} onOpenChange={v => { if (!busy) setOpen(v); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="dialog-content"><Dialog.Title>Remove {repo} from this app?</Dialog.Title><Dialog.Description>Checkout files, commits, cached data and outgoing changes are retained. Add the same repository again to restore it. GitHub is unchanged.</Dialog.Description>{preview ? <><p>{preview.outgoing_count ? `⚠️ ${preview.outgoing_count} outgoing changes have not been pushed.` : "No queued outgoing changes."}</p>{preview.warnings.map(w => <p key={w} role="alert">⚠️ {w}</p>)}<p>💾 Recovery data: <code>{preview.retained_path}</code></p><p><a href={`/api/outbox?${new URLSearchParams({repo, format: "json"})}`} download>Export JSON</a> · <a href={`/api/outbox?${new URLSearchParams({repo, format: "md"})}`} download>Export Markdown</a></p></> : <p>Checking local work…</p>}{error && <p role="alert">{error}</p>}<div className="queue-actions"><Button disabled={busy} onClick={() => setOpen(false)}>Cancel</Button><Button disabled={busy || !preview} onClick={remove}>{busy ? "Removing…" : "Remove from app"}</Button></div></Dialog.Content></Dialog.Portal></Dialog.Root></>;
+}

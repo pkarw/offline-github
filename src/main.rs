@@ -642,11 +642,10 @@ fn view(store: &Store, repo: &str, args: ViewArgs, kind: &str) -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let root = cli.data_dir.unwrap_or_else(|| {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("offline-github")
-    });
+    let root = match cli.data_dir {
+        Some(path) => path,
+        None => store::default_root()?,
+    };
     let store = Store::new(store::absolute(&root)?)?;
     let selected = cli.repo.as_deref();
     match cli.command {

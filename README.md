@@ -16,7 +16,7 @@ Your repositories, issues and pull requests at 35,000 feet. A **Rust + React + s
 - 🌳 Full Git history, branches, tags and available PR heads. Isolated worktrees for testing.
 - ✍️ Offline comments, issue/PR drafts, label changes and review drafts in a durable SQLite outbox.
 - 🟠 Visible pending, sending, conflicted, failed and uncertain markers beside local work.
-- 🔄 Explicit Sync preview, conflict handling and incoming delta sync.
+- 🔄 Separate Pull from GitHub and reviewed Push, with conflict handling.
 - 🧾 Permanent outgoing history with JSON/Markdown exports for you or an agent.
 - 🤖 `ogh`: gh-shaped CLI reads, local Git operations, queued writes and an Open Mercato skill adapter.
 - 🎨 Neutral black surfaces, restrained lime accents, original MIT-licensed branding, no CDN assets.
@@ -75,7 +75,7 @@ a shell in the project. Your host home directory and credentials are **not mount
 The app opens at **http://127.0.0.1:4183**. Return later with
 `~/.local/bin/ogh-sandbox`. See [sandbox details](docs/SANDBOX.md).
 
-> Local comments, labels and PR drafts remain queued until you review Sync.
+> Local comments, labels and PR drafts remain queued until you review and confirm Push.
 > Skills use cached reads and queued writes through `ogh`; live-only claim/merge
 > gates stop offline. Agents are installed/authenticated separately. No global `gh` alias.
 
@@ -124,3 +124,5 @@ REST reading and Git fetch use authenticated GitHub CLI GET calls. Explicit revi
 **License:** [MIT](LICENSE), including original logos. GitHub is a trademark of GitHub, Inc.; this project is independent and uses no GitHub logo. Dependencies retain their own licenses.
 
 Made for long flights and focused work ☁️
+
+💾 App storage: `~/.offline-github` (override with `OGH_DATA_DIR`). Filter issues and PRs by label; remove projects from the app without losing local files or outgoing work. [Storage and recovery details](docs/SETUP.md#storage-and-local-project-removal).

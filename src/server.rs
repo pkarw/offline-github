@@ -74,6 +74,27 @@ async fn repos(State(s): State<Store>) -> ApiResult {
 async fn add(State(s): State<Store>, Json(input): Json<Add>) -> ApiResult {
     blocking(move || s.add(&input.full_name)).await
 }
+#[derive(Deserialize)]
+struct Remove {
+    confirm: bool,
+}
+async fn removal_preview(
+    State(s): State<Store>,
+    Path((o, r)): Path<(String, String)>,
+) -> ApiResult {
+    blocking(move || crate::launcher::removal_preview(&s, &format!("{o}/{r}"))).await
+}
+async fn remove_repo(
+    State(s): State<Store>,
+    Path((o, r)): Path<(String, String)>,
+    Json(input): Json<Remove>,
+) -> ApiResult {
+    blocking(move || {
+        anyhow::ensure!(input.confirm, "Removal must be confirmed");
+        s.remove(&format!("{o}/{r}"))
+    })
+    .await
+}
 async fn sync_repo(State(s): State<Store>, Path((o, r)): Path<(String, String)>) -> ApiResult {
     blocking(move || sync::sync(&s, &format!("{o}/{r}"), false, false)).await
 }
@@ -83,12 +104,33 @@ async fn items(
     Query(q): Query<HashMap<String, String>>,
 ) -> ApiResult {
     blocking(move || {
-        Ok(json!(s.items(
+        let mut result = s.items(
             &format!("{o}/{r}"),
             q.get("kind").map(String::as_str).unwrap_or("issue"),
             q.get("state").map(String::as_str).unwrap_or("open"),
-            q.get("q").map(String::as_str).unwrap_or("")
-        )?))
+            q.get("q").map(String::as_str).unwrap_or(""),
+        )?;
+        if let Some(label) = q.get("label").filter(|label| !label.is_empty()) {
+            result.retain(|item| {
+                item["labels"]
+                    .as_array()
+                    .is_some_and(|labels| labels.iter().any(|l| l["name"].as_str() == Some(label)))
+            });
+        }
+        Ok(json!(result))
+    })
+    .await
+}
+async fn labels(State(s): State<Store>, Path((o, r)): Path<(String, String)>) -> ApiResult {
+    blocking(move || {
+        let snapshot = s.load(&format!("{o}/{r}"))?;
+        let labels: std::collections::BTreeSet<String> = snapshot
+            .items
+            .values()
+            .flat_map(|v| v["labels"].as_array().into_iter().flatten())
+            .filter_map(|v| v["name"].as_str().map(str::to_owned))
+            .collect();
+        Ok(json!(labels))
     })
     .await
 }
@@ -163,6 +205,11 @@ struct OutgoingSync {
     #[serde(default)]
     dry_run: bool,
     plan_token: Option<String>,
+    #[serde(default = "default_pull")]
+    pull: bool,
+}
+fn default_pull() -> bool {
+    true
 }
 async fn send_outgoing(State(s): State<Store>, Json(input): Json<OutgoingSync>) -> ApiResult {
     blocking(move || {
@@ -177,7 +224,7 @@ async fn send_outgoing(State(s): State<Store>, Json(input): Json<OutgoingSync>) 
             &s,
             input.repo.as_deref(),
             input.dry_run,
-            true,
+            input.pull,
             input.plan_token.as_deref(),
         )
     })
@@ -260,7 +307,7 @@ pub async fn serve(
         .route(
             "/api/health",
             get(|State(s): State<Store>| async move {
-                Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true,"data_dir":s.root}))
+                Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true,"desktop_launch":true,"separate_pull_push":true,"data_dir":s.root}))
             }),
         )
         .route("/api/outbox", get(outgoing).post(queue))
@@ -268,7 +315,9 @@ pub async fn serve(
         .route("/api/outbox/{id}/resolve", post(resolve_outgoing))
         .route("/api/repos", get(repos).post(add))
         .route("/api/repos/{o}/{r}/sync", post(sync_repo))
+        .route("/api/repos/{o}/{r}/remove", get(removal_preview).post(remove_repo))
         .route("/api/repos/{o}/{r}/open", get(launch_context).post(launch))
+        .route("/api/repos/{o}/{r}/labels", get(labels))
         .route("/api/repos/{o}/{r}/items", get(items))
         .route("/api/repos/{o}/{r}/items/{n}", get(detail))
         .route("/api/repos/{o}/{r}/tree", get(tree))

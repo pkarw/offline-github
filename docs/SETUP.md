@@ -25,14 +25,14 @@ transport instruction; the real `gh` binary is not replaced or aliased.
 
 It starts `ogh serve` in the background and verifies its health endpoint before
 reporting success. Your browser opens at the actual local URL (normally http://127.0.0.1:4173). The server PID and output are in
-`~/.local/share/ogh-setup/server.pid` and `server.log`. Stop only that PID when
-finished (`kill "$(cat ~/.local/share/ogh-setup/server.pid)"` after checking it
+`~/.offline-github/setup/server.pid` and `server.log`. Stop only that PID when
+finished (`kill "$(cat ~/.offline-github/setup/server.pid)"` after checking it
 still identifies your server). Restart with `ogh serve`.
 
 ## Prerequisites
 
 - **macOS Apple Silicon:** Homebrew; missing Git, GitHub CLI, jq, Python and Node
-  22 are installed using Brew. The app uses the checksummed v0.2.2 binary bundle,
+  22 are installed using Brew. The app uses the checksummed v0.2.3 binary bundle,
   so Rust is unnecessary.
 - **Other macOS/Linux:** Git, curl, GitHub CLI, jq, Python 3, Node.js 22+ and its
   npm, plus a native C build toolchain, pkg-config and OpenSSL development files.
@@ -129,7 +129,7 @@ skills clone is reused; refresh it deliberately and rerun to update copies.
 If port 4173 belongs to a healthy ogh server using the same cache, setup reuses it.
 A different cache, older unverifiable server or unrelated listener is left alone;
 a new server starts on a random free port. The actual URL is printed and saved
-in `~/.local/share/ogh-setup/server.url`. Standalone `ogh serve` also chooses a
+in `~/.offline-github/setup/server.url`. Standalone `ogh serve` also chooses a
 free port and opens the browser; use `--no-browser` on headless machines. Check `server.log` on a
 startup failure. An interrupted initial download can be rerun; an unrecognized
 partial worktree is preserved and requires a new destination or manual inspection.
@@ -148,3 +148,11 @@ Launches use Terminal on macOS, or an available desktop terminal on Linux.
 The new shell retains the repository and cache identity. In a headless VM or
 Microsandbox, desktop launching is unavailable: enter with `ogh-sandbox` and
 start your agent there. The browser cannot launch host tools from a guest.
+
+### Storage and local project removal
+
+Repositories, settings, cached UI and outgoing changes live under `~/.offline-github` by default. Installer state is in `~/.offline-github/setup`; Microsandbox launch state is in `~/.offline-github/sandbox`. `OGH_DATA_DIR` overrides the app storage location. On upgrades, this directory may be a compatibility symlink to the existing platform cache, preserving live SQLite connections and Git worktree links without moving or deleting data. Your development checkout stays in the folder selected during setup.
+
+Use **Pull from GitHub** to fetch incoming changes. **Push changes** previews only outgoing changes and requires confirmation; a zero outgoing count says nothing about incoming changes. Issues and pull requests can both be filtered by label.
+
+**Remove offline repo** checks queued outgoing changes, uncommitted files and local commits against the last cached remote refs. It removes the project from the app list while retaining all files and recovery history. Export JSON or Markdown before removal if desired. Add the same repository again to restore its listing. This does not delete GitHub repositories or reclaim disk space.

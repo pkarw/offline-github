@@ -157,7 +157,7 @@ export function Outgoing({
         <Button onClick={() => download("md")}>Download Markdown</Button>
       </div>
       <p className="muted">
-        Changes are saved locally. Only an explicit sync sends them to GitHub.
+        Changes are saved locally. Only an explicit Push sends them to GitHub.
         Reports include local bodies and conflict history.
       </p>
       <label>
@@ -272,7 +272,7 @@ export function QueueDialog({
           <Dialog.Title>{String(children)}</Dialog.Title>
           <Dialog.Description>
             Save an intention locally. GitHub changes only when you explicitly
-            sync.{kind === "labels" && " Enter comma-separated label names."}
+            push.{kind === "labels" && " Enter comma-separated label names."}
           </Dialog.Description>
           <form onSubmit={submit}>
             {fields.map((f) => (

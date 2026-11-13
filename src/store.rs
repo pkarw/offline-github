@@ -81,6 +81,10 @@ impl Store {
     pub fn add(&self, repo: &str) -> Result<Value> {
         let _guard = self.lock()?;
         validate_repo(repo)?;
+        let removed = self.dir(repo)?.join("removed.json");
+        if removed.exists() {
+            fs::remove_file(removed)?;
+        }
         if self.dir(repo)?.join("snapshot.json").exists() {
             return self.summary(&self.load(repo)?);
         }
@@ -97,6 +101,19 @@ impl Store {
         self.save(&s)?;
         self.summary(&s)
     }
+    /// Forget the listing without destroying recovery data or checkout files.
+    pub fn remove(&self, repo: &str) -> Result<Value> {
+        let _guard = self.lock()?;
+        self.load(repo)?;
+        let retained = self.dir(repo)?;
+        fs::write(
+            retained.join("removed.json"),
+            serde_json::to_vec(&json!({"removed_at":chrono::Utc::now().to_rfc3339()}))?,
+        )?;
+        Ok(
+            json!({"removed":true,"retained_path":retained,"message":"Removed from app. All files and outgoing changes retained; add the same repository to restore."}),
+        )
+    }
     pub fn summary(&self, s: &Snapshot) -> Result<Value> {
         Ok(
             json!({"full_name":s.full_name,"description":s.description,"default_branch":s.default_branch,"last_sync":s.last_sync,"issue_count":s.items.values().filter(|v|v.get("pull_request").is_none()).count(),"pr_count":s.items.values().filter(|v|v.get("pull_request").is_some()).count(),"path":self.mirror(&s.full_name)?}),
@@ -112,7 +129,7 @@ impl Store {
             for repo in fs::read_dir(owner.path())? {
                 let repo = repo?;
                 let path = repo.path().join("snapshot.json");
-                if path.exists() {
+                if path.exists() && !repo.path().join("removed.json").exists() {
                     let s: Snapshot = serde_json::from_slice(&fs::read(path)?)?;
                     out.push(self.summary(&s)?);
                 }
@@ -154,6 +171,31 @@ pub fn absolute(path: &Path) -> Result<PathBuf> {
     } else {
         std::env::current_dir()?.join(path)
     })
+}
+
+/// Preserve existing Git worktree links and live SQLite users during upgrades.
+pub fn default_root() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("Cannot determine home directory; set OGH_DATA_DIR")?;
+    let root = home.join(".offline-github");
+    if !root.try_exists()? {
+        if let Some(legacy) = dirs::data_local_dir()
+            .map(|p| p.join("offline-github"))
+            .filter(|p| p.is_dir())
+        {
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(&legacy, &root)?;
+            }
+            #[cfg(not(unix))]
+            {
+                anyhow::bail!(
+                    "Existing cache at {}; set OGH_DATA_DIR to preserve it",
+                    legacy.display()
+                );
+            }
+        }
+    }
+    Ok(root)
 }
 
 #[cfg(test)]

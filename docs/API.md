@@ -25,3 +25,9 @@ Local launch endpoints (same-origin localhost only):
 
 `ogh serve` falls back to a random loopback port when the requested port is occupied,
 opens the actual URL, and accepts `--no-browser` and `--url-file <path>` for launchers.
+
+- GET /api/repos/:owner/:repo/labels → sorted cached label names.
+- GET /api/repos/:owner/:repo/items?kind=issue|pr&label=NAME → exact label filter, combinable with state/q.
+- GET /api/repos/:owner/:repo/remove → outgoing count, local work warnings and retained data path.
+- POST /api/repos/:owner/:repo/remove `{confirm:true}` → hide project, retain all data; POST /api/repos with the same name restores it.
+- POST /api/outbox/sync accepts `pull:false` for outgoing-only Push (the web UI uses this). Omitted `pull` retains the combined CLI-compatible default. Pull uses only the incoming /sync endpoint.

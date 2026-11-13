@@ -2,7 +2,7 @@
 # Downloadable entry point. bash <(curl ...) keeps stdin free for login and the shell.
 set -euo pipefail
 OGH_SETUP_REF="${OGH_SETUP_REF:-main}"
-OGH_SETUP_ROOT="${OGH_SETUP_ROOT:-$HOME/.local/share/ogh-setup}"
+OGH_SETUP_ROOT="${OGH_SETUP_ROOT:-$HOME/.offline-github/setup}"
 workspace_supplied="${OGH_WORKSPACE:-}"
 OGH_WORKSPACE="${OGH_WORKSPACE:-$HOME/Projects/open-mercato-offline}"
 OGH_SETUP_PORT="${OGH_SETUP_PORT:-4173}"
@@ -57,13 +57,18 @@ esac
 printf '📂 Install project and skills: %s\n' "$OGH_WORKSPACE"
 printf '🧰 Installer files: %s\n' "$OGH_SETUP_ROOT"
 printf '🔧 CLI: %s/.local/bin/ogh · reentry: %s/.local/bin/ogh-work\n' "$HOME" "$HOME"
-case "$(uname -s)" in
-  Darwin) display_cache="$HOME/Library/Application Support/offline-github" ;;
-  *) display_cache="${XDG_DATA_HOME:-$HOME/.local/share}/offline-github" ;;
-esac
+display_cache="$HOME/.offline-github"
 printf '💾 App cache and UI: %s\n' "${OGH_DATA_DIR:-$display_cache}"
 printf '🌐 Browser app: http://127.0.0.1:%s\n\n' "$OGH_SETUP_PORT"
 if [ "$OGH_SETUP_PLAN" = 1 ]; then exit 0; fi
+# Preserve live legacy caches and their Git worktree paths through a compatibility link.
+if [ -z "${OGH_DATA_DIR:-}" ] && [ ! -e "$HOME/.offline-github" ] && [ ! -L "$HOME/.offline-github" ]; then
+  case "$(uname -s)" in
+    Darwin) legacy_cache="$HOME/Library/Application Support/offline-github" ;;
+    *) legacy_cache="${XDG_DATA_HOME:-$HOME/.local/share}/offline-github" ;;
+  esac
+  if [ -d "$legacy_cache" ]; then ln -s "$legacy_cache" "$HOME/.offline-github"; fi
+fi
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 mkdir -p "$OGH_SETUP_ROOT" "$HOME/.local/bin"
 # Install prerequisites using the host package manager, never an implicit sudo.
@@ -104,8 +109,8 @@ fi
 # Apple Silicon users need no Rust build. Validate the release checksum before installation.
 if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ]; then
   bundle="$(mktemp -d "$OGH_SETUP_ROOT/bundle.XXXXXX")"
-  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.2/offline-github-macos-arm64.tgz
-  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.2/SHA256SUMS.txt
+  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.3/offline-github-macos-arm64.tgz
+  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.3/SHA256SUMS.txt
   expected="$(awk '$2 == "offline-github-macos-arm64.tgz" {print $1}' "$bundle/SHA256SUMS.txt")"
   actual="$(shasum -a 256 "$bundle/app.tgz" | awk '{print $1}')"
   [ -n "$expected" ] && [ "$actual" = "$expected" ] || { echo 'Bundle checksum mismatch' >&2; exit 1; }

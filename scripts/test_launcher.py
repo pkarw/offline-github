@@ -59,6 +59,33 @@ with open(os.environ['DESKTOP_LOG'],'a') as f:f.write(json.dumps(sys.argv)+'\\n'
         test_outbox.run('git','--git-dir',fixture.mirror,'worktree','add','--detach',another,fixture.sha)
         assert str(another.resolve()) in request()['workspaces']
         assert request({'tool':'terminal','path':str(another.resolve())})['path']==str(another.resolve())
+        def http(path, data=None):
+            req=urllib.request.Request(url+path, data=json.dumps(data).encode() if data is not None else None, headers={'Content-Type':'application/json'})
+            with urllib.request.urlopen(req, timeout=15) as response:return json.load(response)
+        snapshot=fixture.d/'cache/test/repo/snapshot.json'
+        data=json.loads(snapshot.read_text())
+        data['items']['1']['labels']=[{'name':'bug','color':'ff0000'}]
+        pr=dict(data['items']['1'],number=2,pull_request={},labels=[{'name':'enhancement','color':'00ff00'}])
+        data['items']['2']=pr
+        snapshot.write_text(json.dumps(data))
+        assert http('/api/repos/test/repo/labels')==['bug','enhancement']
+        assert len(http('/api/repos/test/repo/items?kind=issue&label=bug'))==1
+        assert http('/api/repos/test/repo/items?kind=issue&label=enhancement')==[]
+        assert len(http('/api/repos/test/repo/items?kind=pr&label=enhancement'))==1
+        fixture.queue('comment','1',{'body':'Keep this offline work'})
+        (path/'uncommitted.txt').write_text('keep me')
+        preview=http('/api/repos/test/repo/remove')
+        assert preview['outgoing_count']==1 and any('Uncommitted' in w for w in preview['warnings'])
+        try:http('/api/repos/test/repo/remove',{'confirm':False});raise AssertionError('Missing confirmation accepted')
+        except urllib.error.HTTPError as e:assert e.code==400
+        http('/api/repos/test/repo/remove',{'confirm':True})
+        assert http('/api/repos')==[]
+        assert (path/'uncommitted.txt').read_text()=='keep me' and snapshot.exists()
+        assert len(http('/api/outbox?repo=test/repo')['events'])==1
+        http('/api/repos',{'full_name':'test/repo'})
+        assert len(http('/api/repos'))==1
+        assert not snapshot.with_name('removed.json').exists()
+        print('Labels and safe removal passed: issue/PR filtering, pending/dirty warnings, confirmation, retained files/outbox, add restores.')
         print('Launcher passed: occupied port, actual browser URL, safe worktree creation, path validation, quoted paths, cross-origin rejection; all desktop commands stubbed.')
 finally:
     if server is not None:

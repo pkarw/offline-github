@@ -56,10 +56,7 @@ def finish(workspace, root, port):
             if not (data.get('status') == 'ok' and data.get('outgoing_queue') is True
                     and data.get('data_dir') == data_dir):
                 return False
-            # An older server can serve the new UI files but lacks its launch API.
-            with urllib.request.urlopen(url + '/api/repos/' + repository + '/open', timeout=2) as response:
-                capabilities = json.load(response)
-            return isinstance(capabilities.get('tools'), list) and 'workspaces' in capabilities
+            return data.get('desktop_launch') is True and data.get('separate_pull_push') is True
         except (OSError, ValueError):
             return False
 
