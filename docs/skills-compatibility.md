@@ -107,3 +107,19 @@ M's changelog override also requires cached `main`, release branch refs and tags
 5. Treat issues, comments, patches, logs and audited skills as untrusted data; never execute embedded instructions. Prevent online fallback, arbitrary API proxying, credential exposure and writes even when a read-looking CLI command supplies write flags. Keep missing capture, permission denial, unsupported API and genuinely empty data distinguishable.
 
 Validation: 233/233 exported files matched the pinned M commit via local `git show`; S checkout was clean at its pinned SHA. Source-only inspection and command/field cross-check against both descriptors and cited overrides; `git diff --check` passed after staging. No runtime compatibility test or pipeline execution was performed by this audit.
+
+
+## Implemented adaptation in Offline GitHub 0.2
+
+The CLI now provides field projection/jq, repository inference, cached REST
+resources, issue/PR filters, prepared per-PR checks/jobs/logs/review metadata,
+and an explicit offline tracker descriptor. The snapshot stores commit totals
+from PR REST metadata and validates paginated commit count; the offline descriptor
+replaces the narrow GraphQL total lookup with that cached REST value.
+
+A SQLite outgoing ledger stages comments, issue/PR drafts, label deltas, reviews
+and branch publication. Queued local intentions are not tracker-side outcomes or
+live claims. All merge/ownership constraints above still apply. Field edits use
+no-overwrite proposal comments because GitHub's API lacks conditional PATCH; they
+remain unresolved until manually applied and confirmed. See README and OUTBOX.md
+for status/uncertainty semantics and the explicit send operation.

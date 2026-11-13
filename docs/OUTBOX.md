@@ -7,7 +7,7 @@ deletion of applied operations. No implicit upstream mutation on a read or pull.
 ## API (same localhost origin/JSON guard)
 
 - GET `/api/outbox?repo=owner/repo&target=123` → `{events:[Event],counts:{queued,sending,applied,conflict,failed,uncertain,cancelled}}`. Filters optional; all statuses retained. Also supports `?format=md` → Markdown text report, default JSON. A downloadable report is the complete event/audit payload, including local bodies and conflicts.
-- POST `/api/outbox` JSON `{repo,kind,target?,payload,depends_on?:[]}` → Event. Queues locally only. target is string item number (or `local:<event-id>` for a pending new issue/PR). `kind` / payload:
+- POST `/api/outbox` JSON `{repo,kind,target?,payload,depends_on?:[],client_id?:UUID}` → Event. Queues locally only. target is string item number (or `local:<event-id>` for a pending new issue/PR). `kind` / payload:
   - `comment`: `{body}`
   - `edit`: `{item_kind:"issue"|"pr",fields:{title?,body?,state?}}`
   - `labels`: `{add:[names],remove:[names]}`
@@ -40,3 +40,27 @@ success with pending operations. Do not run Sync automatically in tests.
 
 Parent owns backend/CLI/docs. Frontend task owns web/ only. Existing cached API
 shapes remain; frontend obtains outbox separately and refreshes after writes.
+
+
+## No-overwrite field edits
+
+GitHub has no atomic conditional PATCH for issue/PR fields. The safe default
+compares base/remote and preserves title/body/state intentions as proposal comments;
+it leaves them `conflict`/unresolved until manually applied and rechecked. No
+unguarded PATCH is performed. `remote` holds the proposal receipt and `observed`
+holds the last target version. Existing proposals are reconciled by marker, not
+posted repeatedly. A different remote author/content or missing uncertain marker
+requires explicit recovery, not an automatic resend.
+
+The sender selects ONE event snapshot, verifies its SHA-256 plan token, and sends
+only that selected set. Concurrent new enqueues remain for the next preview.
+SQLite writes use immediate transactions; schema initialization is serialized.
+Native branch publications pin their commits and chain planned predecessor SHAs.
+
+
+Clients should supply a stable UUID `client_id` for retrying a local enqueue after
+an HTTP reply was lost. Identical retries return the existing record; reuse for
+different work fails. The UI does this and autosaves comment drafts in the browser.
+The CLI's generic enqueue accepts `--client-id UUID`. Only acknowledged SQLite
+queue entries have the durable journal guarantee; JSON reports also identify the
+local database and Git pin prefix for recovery.

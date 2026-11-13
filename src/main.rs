@@ -1,3 +1,4 @@
+mod app;
 mod format;
 mod offline_api;
 mod outbox;
@@ -87,12 +88,25 @@ enum Commands {
         #[arg(short = 'a', long)]
         all: bool,
     },
+    /// Install local UI assets or show application paths
+    App {
+        #[command(subcommand)]
+        command: AppCommand,
+    },
     Serve {
         #[arg(long, default_value_t = 4173)]
         port: u16,
+        #[arg(long, env = "OGH_WEB_DIR")]
+        web_dir: Option<PathBuf>,
+    },
+}
+#[derive(Subcommand)]
+enum AppCommand {
+    Install {
         #[arg(long, default_value = "web/dist")]
         web_dir: PathBuf,
     },
+    Paths,
 }
 #[derive(Subcommand)]
 enum RepoCommand {
@@ -152,9 +166,9 @@ enum PrCommand {
     Create(CreatePr),
     Review {
         number: String,
-        #[arg(long, conflicts_with = "request_changes")]
+        #[arg(long, conflicts_with_all = ["request_changes","comment"])]
         approve: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "comment")]
         request_changes: bool,
         #[arg(long)]
         comment: bool,
@@ -234,6 +248,8 @@ enum RunCommand {
 enum SearchCommand {
     Issues {
         query: String,
+        #[arg(long,default_value="all",value_parser=["open","closed","merged","all"])]
+        state: String,
         #[arg(short = 'L', long, default_value_t = 30)]
         limit: usize,
         #[command(flatten)]
@@ -241,6 +257,8 @@ enum SearchCommand {
     },
     Prs {
         query: String,
+        #[arg(long,default_value="all",value_parser=["open","closed","merged","all"])]
+        state: String,
         #[arg(short = 'L', long, default_value_t = 30)]
         limit: usize,
         #[command(flatten)]
@@ -281,6 +299,8 @@ enum OutboxCommand {
         payload: String,
         #[arg(long, value_delimiter = ',')]
         depends_on: Vec<String>,
+        #[arg(long)]
+        client_id: Option<String>,
     },
     Resolve {
         id: String,
@@ -393,6 +413,7 @@ fn queue(
             target,
             payload,
             depends_on,
+            client_id: None,
         },
     )?;
     format::emit(&serde_json::to_value(event)?, &Format::default())
@@ -533,6 +554,10 @@ fn list(store: &Store, repo: &str, args: ListArgs, kind: &str) -> Result<()> {
     }
     let search = search::Search::parse(&query)?;
     let s = store.load(repo)?;
+    anyhow::ensure!(
+        s.last_sync.is_some(),
+        "Incoming cache is not complete; run ogh sync -R {repo} before searching"
+    );
     let mut rows = Vec::new();
     for (n, item) in &s.items {
         let pr = item.get("pull_request").is_some();
@@ -626,6 +651,10 @@ async fn main() -> Result<()> {
             RepoCommand::View { repository, format } => {
                 let repo = resolve_repo(&store, repository.as_deref().or(selected))?;
                 let s = store.load(&repo)?;
+                anyhow::ensure!(
+                    s.last_sync.is_some(),
+                    "Repository metadata is not synced; run ogh sync -R {repo} while online"
+                );
                 let value = json!({"nameWithOwner":repo,"name":repo.split('/').nth(1),"description":s.description,"url":format!("https://github.com/{repo}"),"defaultBranchRef":{"name":s.default_branch},"visibility":if s.metadata["private"]==true{"PRIVATE"}else if s.metadata["private"]==false{"PUBLIC"}else{"UNKNOWN"}});
                 format::emit(&value, &format)?;
             }
@@ -743,6 +772,34 @@ async fn main() -> Result<()> {
                     let n = parse_number(&number, &repo, "pull")?;
                     let checks = skills::checks(&store, &repo, n, required)?;
                     format::emit(&checks, &format)?;
+                    let rows = checks.as_array().context("Invalid checks snapshot")?;
+                    anyhow::ensure!(
+                        !rows.is_empty(),
+                        "No checks captured for this head; an empty cache is not a passing gate"
+                    );
+                    let failed = rows.iter().any(|v| {
+                        matches!(
+                            v["state"].as_str(),
+                            Some(
+                                "FAILURE"
+                                    | "ERROR"
+                                    | "CANCELLED"
+                                    | "TIMED_OUT"
+                                    | "ACTION_REQUIRED"
+                                    | "STARTUP_FAILURE"
+                                    | "STALE"
+                            )
+                        )
+                    });
+                    anyhow::ensure!(
+                        !failed,
+                        "Cached checks contain failures; not a live merge gate"
+                    );
+                    if rows.iter().any(|v| {
+                        !matches!(v["state"].as_str(), Some("SUCCESS" | "NEUTRAL" | "SKIPPED"))
+                    }) {
+                        std::process::exit(8);
+                    }
                 }
             }
         }
@@ -816,20 +873,22 @@ async fn main() -> Result<()> {
         }
         Commands::Search { command } => {
             let repo = resolve_repo(&store, selected)?;
-            let (query, limit, fmt, kind) = match command {
+            let (query, state, limit, fmt, kind) = match command {
                 SearchCommand::Issues {
                     query,
+                    state,
                     limit,
                     format,
-                } => (query, limit, format, "issue"),
+                } => (query, state, limit, format, "issue"),
                 SearchCommand::Prs {
                     query,
+                    state,
                     limit,
                     format,
-                } => (query, limit, format, "pr"),
+                } => (query, state, limit, format, "pr"),
             };
             let args = ListArgs {
-                state: "all".into(),
+                state,
                 search: query,
                 author: None,
                 assignee: None,
@@ -875,10 +934,24 @@ async fn main() -> Result<()> {
                 target,
                 payload,
                 depends_on,
+                client_id,
             } => {
                 let repo = resolve_repo(&store, selected)?;
                 let payload = serde_json::from_str(&payload).context("--payload must be JSON")?;
-                queue(&store, &repo, &kind, target, payload, depends_on)?;
+                format::emit(
+                    &serde_json::to_value(outbox::enqueue(
+                        &store,
+                        outbox::Intent {
+                            repo,
+                            kind,
+                            target,
+                            payload,
+                            depends_on,
+                            client_id,
+                        },
+                    )?)?,
+                    &Format::default(),
+                )?;
             }
             OutboxCommand::Resolve { id, action } => format::emit(
                 &serde_json::to_value(outbox::resolve(&store, &id, &action)?)?,
@@ -890,10 +963,17 @@ async fn main() -> Result<()> {
                 plan_token,
             } => {
                 anyhow::ensure!(dry_run||yes,"Outgoing sync can publish changes. Review ogh outbox report first, then use --yes; --dry-run never sends anything.");
-                format::emit(
-                    &outbox::sync(&store, selected, dry_run, true, plan_token.as_deref())?,
-                    &Format::default(),
-                )?;
+                let result = outbox::sync(&store, selected, dry_run, true, plan_token.as_deref())?;
+                format::emit(&result, &Format::default())?;
+                if !dry_run {
+                    let unresolved = result["events"].as_array().is_some_and(|rows| {
+                        rows.iter()
+                            .any(|v| !matches!(v["status"].as_str(), Some("applied" | "cancelled")))
+                    }) || result["incoming_errors"]
+                        .as_array()
+                        .is_some_and(|rows| !rows.is_empty());
+                    anyhow::ensure!(!unresolved,"Sync has unresolved outgoing changes or incoming errors; confirmed results are retained. Inspect ogh outbox report");
+                }
             }
         },
         Commands::Branch { command } => {
@@ -985,7 +1065,16 @@ async fn main() -> Result<()> {
             }
             print!("{}", process::run("git", &args, 120)?);
         }
-        Commands::Serve { port, web_dir } => server::serve(store, port, web_dir).await?,
+        Commands::App { command } => match command {
+            AppCommand::Install { web_dir } => {
+                format::emit(&app::install(&store, &web_dir)?, &Format::default())?
+            }
+            AppCommand::Paths => format::emit(&app::paths(&store), &Format::default())?,
+        },
+        Commands::Serve { port, web_dir } => {
+            let web_dir = app::web_dir(&store, web_dir);
+            server::serve(store, port, web_dir).await?;
+        }
     }
     Ok(())
 }

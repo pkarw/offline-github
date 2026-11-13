@@ -21,6 +21,8 @@ body=json.loads(Path(args[args.index('--input')+1]).read_text()) if '--input' in
 with open(os.environ['MOCK_LOG'],'a') as f:f.write(json.dumps({'method':method,'path':path,'body':body})+'\n')
 p=urllib.parse.urlparse(path);c=urllib.parse.unquote(p.path).split('/');query=urllib.parse.parse_qs(p.query)
 result=None
+if os.environ.get('DROP_BEFORE_WRITE') and method=='POST' and not data.get('dropped_before'):
+ data['dropped_before']=True;state.write_text(json.dumps(data));print('simulated ambiguous failure before remote write',file=sys.stderr);sys.exit(1)
 
 def missing():
  print('gh: Not Found (HTTP 404)',file=sys.stderr);sys.exit(1)
@@ -41,7 +43,9 @@ elif len(c)==5 and c[3]=='issues':
  item=data['items'].get(c[4]);
  if item is None:missing()
  if method=='PATCH':item.update(body);data['items'][c[4]]=item
- result=item
+ result=dict(item)
+ if method=='GET' and os.environ.get('EDIT_RACE'):
+  data['items'][c[4]]['title']='Upstream edit raced after GET'
 elif len(c)==6 and c[3]=='issues' and c[5]=='comments':
  if method=='POST':
   result={'id':len(data['comments'])+100,'body':body['body'],'user':{'login':'tester'},'created_at':'2026-11-13T00:00:00Z','updated_at':'2026-11-13T00:00:00Z','issue_url':'https://api.github.com/repos/test/repo/issues/'+c[4],'html_url':'https://github.com/test/repo/issues/'+c[4]+'#comment'}
@@ -114,7 +118,10 @@ class OutboxTests(unittest.TestCase):
   args=['outbox','enqueue','-R','test/repo','--kind',kind,'--payload',json.dumps(payload or {})]
   if target:args+=['--target',target]
   return self.j(*args)
- def sync(self,env=None):return json.loads(self.cmd('outbox','sync','--yes','-R','test/repo',env=env).stdout)
+ def sync(self,env=None):
+  result=self.cmd('outbox','sync','--yes','-R','test/repo',env=env,ok=False)
+  if not result.stdout:raise AssertionError(result.stderr)
+  return json.loads(result.stdout)
  def events(self):return self.j('outbox','report')['events']
  def test_queue_survives_restart_and_preview_is_no_network(self):
   e=self.queue('comment','1',{'body':'Offline\n``` text'})
@@ -139,20 +146,55 @@ class OutboxTests(unittest.TestCase):
   posts=[json.loads(x) for x in (self.d/'requests').read_text().splitlines() if json.loads(x)['method']=='POST']
   self.assertEqual(len(posts),1)
   self.assertTrue(any(h['action']=='send_uncertain' for h in self.events()[0]['history']))
+ def test_uncertain_absent_never_blindly_resends(self):
+  e=self.queue('comment','1',{'body':'Conservative recovery'})
+  self.assertEqual(self.sync(env=dict(self.env,DROP_BEFORE_WRITE='1'))['counts']['uncertain'],1)
+  self.assertEqual(len(self.load_state()['comments']),0)
+  self.assertEqual(self.sync()['counts']['uncertain'],1)
+  posts=[json.loads(x) for x in (self.d/'requests').read_text().splitlines() if json.loads(x)['method']=='POST']
+  self.assertEqual(len(posts),1,'uncertain absence must not auto-resend')
+  self.j('outbox','resolve',e['id'],'--action','retry')
+  self.assertEqual(self.sync()['counts']['applied'],1)
+  self.assertEqual(len(self.load_state()['comments']),1)
+ def test_uncertain_marker_removed_does_not_duplicate(self):
+  self.queue('comment','1',{'body':'Original comment'})
+  self.sync(env=dict(self.env,DROP_AFTER_WRITE='1'))
+  self.state=self.load_state();self.state['comments'][0]['body']='Edited remotely; marker removed';self.write_state()
+  self.assertEqual(self.sync()['counts']['uncertain'],1)
+  self.assertEqual(len(self.load_state()['comments']),1)
  def test_conflict_preserves_all_versions_then_explicit_resolution(self):
   e=self.queue('edit','1',{'fields':{'title':'Local title'}})
   self.state['items']['1']['title']='Remote title';self.write_state()
   result=self.sync();self.assertEqual(result['counts']['conflict'],1)
   saved=self.events()[0];self.assertEqual(saved['base']['title'],'Initial');self.assertEqual(saved['payload']['fields']['title'],'Local title');self.assertEqual(saved['observed']['title'],'Remote title')
   self.j('outbox','resolve',e['id'],'--action','use_local')
+  self.assertEqual(self.sync()['counts']['conflict'],1)
+  self.assertEqual(self.load_state()['items']['1']['title'],'Remote title','unsafe issue PATCH must not overwrite fields')
+  self.assertIn('Offline edit proposal',self.state['comments'][0]['body'])
+  self.state['items']['1']['title']='Local title';self.write_state() # user applied the proposal on GitHub
+  self.j('outbox','resolve',e['id'],'--action','use_local')
   self.assertEqual(self.sync()['counts']['applied'],1)
-  self.assertEqual(self.load_state()['items']['1']['title'],'Local title')
   self.assertTrue(any(h['action']=='resolved_use_local' for h in self.events()[0]['history']))
+ def test_edit_race_keeps_upstream_content_and_retains_local_proposal(self):
+  self.queue('edit','1',{'fields':{'title':'Offline title'}})
+  result=self.sync(env=dict(self.env,EDIT_RACE='1'))
+  self.assertEqual(result['counts']['conflict'],1)
+  self.assertEqual(self.load_state()['items']['1']['title'],'Upstream edit raced after GET')
+  self.assertIn('Offline title',self.state['comments'][0]['body'])
+  writes=[json.loads(line)['method'] for line in (self.d/'requests').read_text().splitlines()]
+  self.assertNotIn('PATCH',writes,'no unguarded field overwrite allowed')
  def test_consecutive_edits_depend_on_each_other(self):
   first=self.queue('edit','1',{'fields':{'title':'First title'}})
   second=self.queue('edit','1',{'fields':{'title':'Second title'}})
   self.assertIn(first['id'],second['depends_on']);self.assertEqual(second['base']['title'],'First title')
-  self.assertEqual(self.sync()['counts']['applied'],2);self.assertEqual(self.load_state()['items']['1']['title'],'Second title')
+  self.assertEqual(self.sync()['counts']['conflict'],1)
+  self.assertEqual(self.load_state()['items']['1']['title'],'Initial')
+  self.state['items']['1']['title']='First title';self.write_state()
+  self.j('outbox','resolve',first['id'],'--action','use_local')
+  result=self.sync();self.assertEqual(result['counts']['applied'],1);self.assertEqual(result['counts']['conflict'],1)
+  self.state=self.load_state();self.state['items']['1']['title']='Second title';self.write_state()
+  self.j('outbox','resolve',second['id'],'--action','use_local')
+  self.assertEqual(self.sync()['counts']['applied'],2)
  def test_new_issue_comment_dependency(self):
   created=self.queue('issue_create',payload={'title':'New offline issue','body':'Original draft','labels':[]})
   self.queue('comment','local:'+created['id'],{'body':'Draft follow-up'})
@@ -186,6 +228,28 @@ class OutboxTests(unittest.TestCase):
   remote=run('git','-C',self.source,'rev-parse','HEAD').stdout.strip();self.state['branches']['taken']=remote;self.write_state()
   result=self.sync();self.assertEqual(result['counts']['conflict'],1)
   self.assertEqual(self.load_state()['branches']['taken'],remote)
+ def test_concurrent_enqueue_cannot_escape_reviewed_plan(self):
+  import time
+  for index,delay in enumerate([0,.005,.01,.02]):
+   first=self.queue('comment','1',{'body':'Reviewed '+str(index)})
+   token=self.j('outbox','sync','--dry-run','-R','test/repo')['plan_token']
+   with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+    write=pool.submit(self.queue,'comment','1',{'body':'NOT PREVIEWED '+str(index)})
+    time.sleep(delay)
+    sync=pool.submit(self.cmd,'outbox','sync','--yes','-R','test/repo','--plan-token',token,ok=False)
+    second=write.result();sync.result()
+   self.assertFalse(any(c['body'].startswith('NOT PREVIEWED') for c in self.load_state()['comments']))
+   for e in self.events():
+    if e['status'] not in ('applied','cancelled'):self.j('outbox','resolve',e['id'],'--action','keep_remote')
+ def test_client_retry_is_deduplicated_locally(self):
+  import uuid
+  client=str(uuid.uuid4())
+  args=['outbox','enqueue','-R','test/repo','--kind','comment','--target','1','--payload',json.dumps({'body':'Same local request'}),'--client-id',client]
+  with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:rows=list(pool.map(lambda _:self.j(*args),range(4)))
+  self.assertTrue(all(r['id']==client for r in rows));self.assertEqual(len(self.events()),1);self.assertEqual(len(self.events()[0]['history']),1)
+  changed=args.copy();changed[changed.index('--payload')+1]=json.dumps({'body':'Different intention'})
+  self.assertNotEqual(self.cmd(*changed,ok=False).returncode,0)
+  self.assertEqual(self.events()[0]['payload']['body'],'Same local request')
  def test_parallel_enqueues_and_cancelled_history_retained(self):
   with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:rows=list(pool.map(lambda i:self.queue('comment','1',{'body':'Concurrent '+str(i)}),range(8)))
   self.assertEqual(len(self.events()),8)

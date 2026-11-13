@@ -14,3 +14,5 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: bash scripts/check.sh
+        env:
+          OGH_BROWSER_TESTS: "1"

@@ -1,9 +1,9 @@
 # Tracker provider: Offline GitHub (ogh)
 
-This is an explicit **read-only offline preparation provider**, not an online
+This is an explicit **offline preparation and outgoing-queue provider**, not an online
 GitHub provider and not authorization to bypass any skill's claim/QA/merge gate.
 Use it for local analysis, specifications, reviews saved locally, code changes,
-and local tests. GitHub remains master. Do not replace `gh` globally or alias it:
+local tests, and explicitly queued outgoing intentions. GitHub remains master. Do not replace `gh` globally or alias it:
 `ogh sync` and `ogh skills prepare` use the real authenticated `gh` while online.
 
 ## Prerequisites and provenance
@@ -56,12 +56,37 @@ Search supports text/quoted phrases, `in:title,body,comments`, `is:`, `state:`,
 GitHub search operators are unsupported. Workflow coverage includes only prepared
 PR heads, not every Actions run in the repository.
 
+## Queued write operations (local intent, not remote tracker state)
+
+The app now supports durable intentions through `ogh issue comment/create/edit`,
+`ogh pr comment/create/edit/review`, `ogh label create`, and `ogh branch publish`.
+These commands return a local event, not a GitHub issue URL or claim receipt.
+`issue edit --add-label/--remove-label` stages label deltas; field edits preserve
+proposals under the default no-overwrite policy. `ogh outbox report --format
+json|md` exposes all payloads, conflicts, receipts and audit history.
+
+Only reviewed `ogh outbox sync --yes` / the UI's explicit Sync confirmation sends
+outgoing work. It reconciles uncertain results before any retry; unconfirmed
+results remain visible. Read [the outgoing contract](../OUTBOX.md).
+
+Queued assignment/labels/comments never satisfy a mandatory LIVE claim step.
+Do not report a PR published, review submitted or issue created until its event
+has an actual GitHub confirmation. Do not overwrite the original GitHub master
+snapshot with local intentions. Root-cause/local review may continue; an auto
+pipeline requiring a fresh claim must stop or resume online.
+
+For commit attribution, after preparation use
+`ogh api repos/OWNER/REPO/pulls/NUMBER --jq .commits` for the independently captured
+REST commit total, and paginated `/pulls/NUMBER/commits` for identities. Preparation
+asserts count equality. Replace the skill's narrow GraphQL total-count lookup
+with this explicit offline alternative; arbitrary GraphQL is not emulated.
+
 ## Operations that require live GitHub
 
 Do not run acquire/release-lock, claim-reset/winner/withdraw, assign/unassign,
-create/edit/close/comment, label mutations, post reviews, ready/merge PRs,
+ready/merge PRs,
 approve/rerun/watch workflows, image/session publication, pushes or branch
-protection changes through this provider. There is no local lock emulation and
-no deferred write queue. If a skill requires one of these operations before
+protection changes through this provider. There is no local lock emulation. The outgoing queue does not authorize these
+live-only operations or make queued intentions remotely visible. If a skill requires one of these operations before
 implementation, stop that workflow and do explicitly requested local preparation
 instead. Save findings/patches locally and resume the actual skill online.

@@ -82,7 +82,10 @@ pub fn item(item: &Value, detail: Option<&Value>, repo: &str) -> Result<Value> {
             result["files"]=json!(files.iter().map(|v|json!({"path":v["filename"],"additions":v["additions"],"deletions":v["deletions"]})).collect::<Vec<_>>());
         }
     }
-    if let Some(commits) = d["commits"].as_array() {
+    if let Some(commits) = d["commits"]
+        .as_array()
+        .filter(|_| !d["skills_head_sha"].is_null() && d["skills_head_sha"] == item["head"]["sha"])
+    {
         result["commits"]=json!(commits.iter().map(|v|json!({"oid":v["sha"],"messageHeadline":v["commit"]["message"].as_str().unwrap_or("").lines().next().unwrap_or("")})).collect::<Vec<_>>());
     }
     if d["reviews_cached"] == true {

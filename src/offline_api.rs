@@ -66,6 +66,10 @@ pub fn read(
         bail!("Unsupported offline REST endpoint '{path}'; GraphQL, live locks, and mutations are unavailable")
     };
     let s = store.load(&repo)?;
+    anyhow::ensure!(
+        s.last_sync.is_some(),
+        "Incoming cache has not been synced; no online request was attempted"
+    );
     let prefix = format!("repos/{repo}");
     let canonical = if full == "user" {
         "user".into()
@@ -131,6 +135,13 @@ pub fn read(
                 } else {
                     c[2]
                 };
+                if key == "commits" {
+                    anyhow::ensure!(
+                        !d["skills_head_sha"].is_null()
+                            && d["skills_head_sha"] == d["item"]["head"]["sha"],
+                        "Commit context missing/stale; run ogh skills prepare --pr {n} -R {repo}"
+                    );
+                }
                 if key == "reviews" {
                     anyhow::ensure!(
                         d["reviews_cached"] == true,

@@ -339,7 +339,7 @@ pub fn logs(store: &Store, repo: &str, id: u64) -> Result<String> {
 }
 pub fn status(store: &Store, repo: &str, n: Option<u64>) -> Result<Value> {
     let s = store.load(repo)?;
-    let mut value = json!({"repository":repo,"mode":"offline_read_only","last_sync":s.last_sync,"resources":s.resources.len(),"writes":false,"live_authentication_verified":false,"live_merge_authorization":false,"provider":"ogh skills provider","blocked":["claims and atomic locks","GitHub mutations and publishing","merges","workflow execution and watching","arbitrary GraphQL"]});
+    let mut value = json!({"repository":repo,"mode":"offline_first","last_sync":s.last_sync,"resources":s.resources.len(),"incoming_ready":s.last_sync.is_some(),"local_queue":true,"direct_tracker_writes":false,"live_authentication_verified":false,"live_merge_authorization":false,"provider":"ogh skills provider","blocked":["claims and atomic locks","GitHub mutations and publishing","merges","workflow execution and watching","arbitrary GraphQL"]});
     if let Some(n) = n {
         let d = s.details.get(&n).context("PR not cached")?;
         value["pr"] = json!({"number":n,"head_sha":d["item"]["head"]["sha"],"prepared_head_sha":d["skills_head_sha"],"prepared_at":d["skills_prepared_at"],"context_valid":prepared(&s,n).is_ok(),"gaps":d["gaps"]});

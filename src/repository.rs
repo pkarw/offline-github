@@ -50,6 +50,9 @@ pub fn diff(store: &Store, repo: &str, n: u64) -> Result<String> {
 }
 pub fn detail(store: &Store, repo: &str, n: u64) -> Result<Value> {
     let mut d = store.detail(repo, n)?;
+    let captured_files = d["files"].clone();
+    let valid_capture =
+        !d["skills_head_sha"].is_null() && d["skills_head_sha"] == d["item"]["head"]["sha"];
     if d["item"].get("pull_request").is_some() {
         match diff(store, repo, n) {
             Ok(patch) => {
@@ -104,6 +107,9 @@ pub fn detail(store: &Store, repo: &str, n: u64) -> Result<Value> {
                 d["diff_error"] = json!(e.to_string());
             }
         }
+    }
+    if valid_capture && captured_files.is_array() {
+        d["files"] = captured_files;
     }
     Ok(d)
 }

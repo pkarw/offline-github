@@ -334,7 +334,7 @@ function App() {
             the source of truth.
           </p>
           <span className="version">
-            LOCAL-FIRST WORKSPACE <span>v0.1</span>
+            LOCAL-FIRST WORKSPACE <span>v0.2</span>
           </span>
         </div>
       </aside>

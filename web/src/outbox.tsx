@@ -13,7 +13,7 @@ export type Event = {
   observed: unknown;
   status: string;
   error: string | null;
-  remote: { id?: number } | null;
+  remote: { id?: number; html_url?: string } | null;
   history: { at: string; action: string; data: unknown }[];
   created_at: string;
 };
@@ -86,6 +86,7 @@ export function EventCard({
             </section>
           ))}
         </div>
+        {e.remote && <p className="muted">GitHub receipt: {e.remote.html_url?.startsWith("https://github.com/") ? <a href={e.remote.html_url} target="_blank" rel="noreferrer">View on GitHub</a> : <code>{e.remote.id || "Recorded in JSON report"}</code>}</p>}
         <h4>Event history</h4>
         {e.history.map((h, i) => (
           <div className="audit-row" key={i}>
@@ -98,7 +99,7 @@ export function EventCard({
         {e.status === "conflict" && (
           <>
             <Button disabled={busy} onClick={() => resolve("use_local")}>
-              Use local change
+              {e.kind === "edit" ? "Recheck edit / refresh baseline" : "Use local change"}
             </Button>
             <Button disabled={busy} onClick={() => resolve("keep_remote")}>
               Keep GitHub version
@@ -106,9 +107,9 @@ export function EventCard({
           </>
         )}
         {["queued", "failed"].includes(e.status) && <Button disabled={busy} onClick={() => resolve("keep_remote")}>Cancel queued change</Button>}
-        {["failed", "uncertain"].includes(e.status) && (
+        {["failed", "uncertain", "sending"].includes(e.status) && (
           <Button disabled={busy} onClick={() => resolve("retry")}>
-            Retry safely
+            Recheck and retry
           </Button>
         )}
       </div>
@@ -207,6 +208,7 @@ export function QueueDialog({
     [values, setValues] = useState<Record<string, string>>({}),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [clientId, setClientId] = useState(() => crypto.randomUUID());
   const fields =
     kind === "label_create"
       ? ["name", "color", "description"]
@@ -235,9 +237,10 @@ export function QueueDialog({
     try {
       await api("/api/outbox", {
         method: "POST",
-        body: JSON.stringify({ repo, kind, target, payload }),
+        body: JSON.stringify({ repo, kind, target, payload, client_id: clientId }),
       });
       refresh();
+      setClientId(crypto.randomUUID());
       setOpen(false);
     } catch (err) {
       setError((err as Error).message);
@@ -249,6 +252,8 @@ export function QueueDialog({
     <Dialog.Root
       open={open}
       onOpenChange={(v) => {
+        if (busy) return;
+        if (!v) setClientId(crypto.randomUUID());
         setOpen(v);
         if (v) {
           setValues(
@@ -305,7 +310,7 @@ export function QueueDialog({
             )}
             <div className="queue-actions">
               <Dialog.Close asChild>
-                <Button type="button">Cancel</Button>
+                <Button type="button" disabled={busy}>Cancel</Button>
               </Dialog.Close>
               <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Queue change"}
@@ -328,9 +333,21 @@ export function LocalDiscussion({
   repo: string;
   refresh: () => void;
 }) {
-  const [body, setBody] = useState(""),
+  const draftKey = `ogh:comment:${repo}:${detail.item.number}`;
+  function savedDraft(): {body?: string; client_id?: string} {
+    try { return JSON.parse(localStorage.getItem(draftKey) || "{}"); } catch { return {}; }
+  }
+  const [body, setBody] = useState(() => savedDraft().body || ""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [clientId, setClientId] = useState(() => savedDraft().client_id || crypto.randomUUID());
+  function changeBody(value: string) {
+    const nextId = error ? crypto.randomUUID() : clientId;
+    if (error) {setClientId(nextId);setError("");}
+    setBody(value);
+    try { localStorage.setItem(draftKey, JSON.stringify({body: value, client_id: nextId})); }
+    catch { setError("Browser draft autosave is unavailable. Queue the comment to preserve it in the durable outbox."); }
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -343,9 +360,12 @@ export function LocalDiscussion({
           kind: "comment",
           target: String(detail.item.number),
           payload: { body },
+          client_id: clientId,
         }),
       });
       setBody("");
+      try { localStorage.removeItem(draftKey); } catch { /* durable queue is already confirmed */ }
+      setClientId(crypto.randomUUID());
       refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -381,8 +401,9 @@ export function LocalDiscussion({
         <textarea
           id="local-comment"
           required
+          disabled={busy}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => changeBody(e.target.value)}
           placeholder="Write Markdown…"
         />
         <Button disabled={busy || !body.trim()} type="submit">

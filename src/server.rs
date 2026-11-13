@@ -205,7 +205,7 @@ pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> 
     let index = web.join("index.html");
     anyhow::ensure!(
         index.exists(),
-        "Frontend build missing at {}; run npm ci && npm run build in web/, or set --web-dir",
+        "Frontend build missing at {}; run ogh app install --web-dir /path/to/web/dist after building the UI, or set --web-dir",
         web.display()
     );
     let app = Router::new()
