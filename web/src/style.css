@@ -1348,3 +1348,5 @@ textarea {
     padding: 20px;
   }
 }
+
+.notice-warning { background: #2d2513; border-color: #5b451b; color: #facc6b; }

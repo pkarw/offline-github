@@ -116,6 +116,7 @@ function App() {
     [error, setError] = useState(""),
     [syncing, setSyncing] = useState(false),
     [notice, setNotice] = useState(""),
+    [noticeWarning, setNoticeWarning] = useState(false),
     [version, setVersion] = useState(0),
     [addOpen, setAddOpen] = useState(false),
     [newRepo, setNewRepo] = useState(""),
@@ -201,6 +202,7 @@ function App() {
     setSyncing(true);
     setError("");
     setNotice("");
+    setNoticeWarning(false);
     try {
       const plan = await api<Outbox>("/api/outbox/sync", {
         method: "POST",
@@ -218,6 +220,7 @@ function App() {
     setSyncing(true);
     setError("");
     setNotice("");
+    setNoticeWarning(false);
     try {
       const result = await api<Outbox>("/api/outbox/sync", {
         method: "POST",
@@ -227,6 +230,7 @@ function App() {
       const errors =
         result.incoming_errors &&
         Object.keys(result.incoming_errors as object).length > 0;
+      setNoticeWarning(remaining > 0 || Boolean(errors));
       setNotice(
         `${remaining ? `${remaining} outgoing changes remain unresolved.` : "Outgoing changes reconciled."}${errors ? ` Cache refresh errors: ${JSON.stringify(result.incoming_errors)}` : " Incoming refresh completed."}`,
       );
@@ -257,6 +261,7 @@ function App() {
       setNumber(null);
       setAddOpen(false);
       setNewRepo("");
+      setNoticeWarning(false);
       setNotice("Repository added. Sync it to download a local copy.");
     } catch (e) {
       setAddError((e as Error).message);
@@ -301,6 +306,7 @@ function App() {
                 setNumber(null);
                 setError("");
                 setNotice("");
+    setNoticeWarning(false);
                 setMobile(false);
               }}
             >
@@ -383,8 +389,8 @@ function App() {
           </div>
           {error && <ErrorBox error={error} />}
           {notice && (
-            <div className="notice" role="status">
-              <Check size={16} />
+            <div className={noticeWarning ? "notice notice-warning" : "notice"} role={noticeWarning ? "alert" : "status"}>
+              {noticeWarning ? <AlertCircle size={16} /> : <Check size={16} />}
               {notice}
             </div>
           )}

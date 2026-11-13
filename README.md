@@ -216,6 +216,10 @@ Bare `--json` retains legacy raw ogh output; `--json number,title,…` returns g
 <details><summary>📸 More screenshots</summary>
 
 ![Open Mercato workspace](docs/screenshots/open-mercato.png)
+![Outgoing changes and report export — local test fixture](docs/screenshots/outgoing.png)
+![Conflict comparison — local test fixture](docs/screenshots/conflict.png)
+
+*Queue/conflict screenshots use isolated test fixtures; no test changes were posted to real GitHub.*
 ![PR diff](docs/screenshots/pull-request.png)
 ![Local source browser](docs/screenshots/source.png)
 <img src="docs/screenshots/mobile.png" width="320" alt="Mobile workspace" />

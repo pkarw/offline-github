@@ -40,6 +40,8 @@ const fs=require('fs');const path=require('path');
  const remoteFile=path.join(process.env.OGH_TEST_DIR,'remote.json');let remote=JSON.parse(fs.readFileSync(remoteFile,'utf8'));remote.items['1'].title='Independent GitHub title';fs.writeFileSync(remoteFile,JSON.stringify(remote));
  await page.getByRole('button',{name:'Preview sync',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Sync 1 changes',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0,{timeout:30000});
  await page.getByRole('button',{name:/Outgoing/}).click();await expect(page.locator('.queue-marker.queue-conflict')).toHaveCount(1);await expect(page.locator('.queue-card').filter({hasText:'Offline revised title'})).toContainText('Independent GitHub title');
+ await page.getByRole('combobox').selectOption('conflict');
+ await expect(page.locator('.notice-warning')).toBeVisible();
  await page.screenshot({path:path.join(artifacts,'outgoing-conflict.png')});
  remote=JSON.parse(fs.readFileSync(remoteFile,'utf8'));if(remote.items['1'].title!=='Independent GitHub title')throw Error('Remote edit was overwritten');
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(300);if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Outgoing mobile horizontal overflow');await page.screenshot({path:path.join(artifacts,'outgoing-mobile.png')});
