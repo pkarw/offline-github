@@ -194,12 +194,12 @@ pub fn sync(store: &Store, repo: &str, reviews: bool, full: bool) -> Result<Valu
         Err(error) => json!({"error":error.to_string()}),
     };
     eprintln!(
-        "Image cache: {} downloaded, {} cached, {} unavailable",
-        images["downloaded"], images["cached"], images["failed"]
+        "Image cache: {} downloaded, {} cached, {} unavailable, {} deferred",
+        images["downloaded"], images["cached"], images["failed"], images["deferred"]
     );
     s.last_sync = Some(start.clone());
     store.save(&s)?;
     Ok(
-        json!({"message":format!("Synced {repo}; {changed} changed issues/PRs; images: {} downloaded, {} cached, {} unavailable", images["downloaded"], images["cached"], images["failed"]),"changed":changed,"last_sync":start,"images":images}),
+        json!({"message":format!("Synced {repo}; {changed} changed issues/PRs; images: {} downloaded, {} cached, {} unavailable, {} deferred", images["downloaded"], images["cached"], images["failed"], images["deferred"]),"changed":changed,"last_sync":start,"images":images}),
     )
 }

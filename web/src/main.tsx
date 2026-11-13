@@ -70,7 +70,7 @@ function CachedImage({ src, alt }: { src?: string; alt?: string }) {
     window.addEventListener("ogh-images-pulled", retry);
     return () => window.removeEventListener("ogh-images-pulled", retry);
   }, []);
-  if (!src || failed) return <span className="image-placeholder">[Image: {alt || "not downloaded — Pull from GitHub to retry"}]</span>;
+  if (!src || failed) return <span className="image-placeholder">[Image not cached: {alt || "attached image"}. Pull from GitHub to retry.]</span>;
   return <img className="cached-image" src={`/api/media?${new URLSearchParams({url: src, v: String(revision)})}`} alt={alt || "Comment image"} loading="lazy" onError={() => setFailed(true)} />;
 }
 // Support GitHub's pasted <img> screenshots while keeping all other HTML disabled.
@@ -253,10 +253,10 @@ function App() {
     if (!selected) return;
     setPulling(true); setError(""); setNotice(""); setNoticeWarning(false);
     try {
-      const result = await api<{ images?: { downloaded?: number; failed?: number; error?: string } }>(repoUrl(selected) + "/sync", { method: "POST", body: "{}" });
+      const result = await api<{ images?: { downloaded?: number; failed?: number; deferred?: number; error?: string } }>(repoUrl(selected) + "/sync", { method: "POST", body: "{}" });
       window.dispatchEvent(new Event("ogh-images-pulled"));
       const images = result.images;
-      const imageNotice = images ? images.error ? " Image caching failed; retry Pull." : ` Images: ${images.downloaded || 0} downloaded, ${images.failed || 0} unavailable.` : "";
+      const imageNotice = images ? images.error ? " Image caching failed; retry Pull." : ` Images: ${images.downloaded || 0} downloaded, ${images.failed || 0} unavailable${images.deferred ? `, ${images.deferred} waiting for the next Pull` : ""}.` : "";
       setNotice("Pull completed. Your local copy is up to date; outgoing changes were not sent." + imageNotice);
       await loadRepos(); refreshOutbox();
     } catch (error) { setError((error as Error).message); }

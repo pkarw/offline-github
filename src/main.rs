@@ -43,6 +43,9 @@ enum Commands {
         reviews: bool,
         #[arg(long)]
         full: bool,
+        /// Retry cached conversation images without fetching Git or metadata
+        #[arg(long, conflicts_with_all = ["reviews", "full"])]
+        images_only: bool,
     },
     Issue {
         #[command(subcommand)]
@@ -666,7 +669,11 @@ async fn main() -> Result<()> {
                 format::emit(&value, &format)?;
             }
         },
-        Commands::Sync { reviews, full } => {
+        Commands::Sync {
+            reviews,
+            full,
+            images_only,
+        } => {
             let repos = if let Some(r) = selected {
                 vec![r.into()]
             } else {
@@ -681,6 +688,11 @@ async fn main() -> Result<()> {
                 "No repositories registered; use ogh repo add owner/repo"
             );
             for r in repos {
+                if images_only {
+                    let snapshot = store.load(&r)?;
+                    format::emit(&media::pull(&store, &snapshot)?, &Format::default())?;
+                    continue;
+                }
                 format::emit(
                     &sync::sync(&store, &r, reviews, full).with_context(|| {
                         format!("Sync of {r} failed; last completed watermark retained")

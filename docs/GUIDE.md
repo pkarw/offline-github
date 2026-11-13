@@ -208,5 +208,11 @@ and AVIF, up to 20 MiB each. SVG, external image hosts and images requiring a
 separate authenticated session are not downloaded. Pull continues when an image
 fails; the sync JSON includes image counts and failures. Each repo also retains
 `image-report.json` beside its snapshot. Missing images are retried on the next
-Pull (image downloads have a two-minute budget per pull). Cached images are
-retained when a repository is removed from the app.
+Pull. Downloads use eight workers, prioritize newer conversations, and have a
+two-minute budget per Pull. Deferred images are counted separately from failures.
+Retry just the image cache without fetching Git or metadata:
+
+```sh
+ogh sync -R open-mercato/open-mercato --images-only
+```
+Cached images are retained when a repository is removed from the app.

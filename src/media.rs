@@ -6,9 +6,10 @@ use reqwest::{blocking::Client, redirect::Policy, Url};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     fs,
     io::Read,
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -121,9 +122,17 @@ pub fn pull(store: &Store, snapshot: &Snapshot) -> Result<Value> {
 fn pull_images(store: &Store, snapshot: &Snapshot) -> Result<Value> {
     let folder = store.root.join("media");
     fs::create_dir_all(&folder)?;
-    let mut found = BTreeSet::new();
-    for row in snapshot.details.values() {
-        collect(row, &mut found);
+    // Newest conversations first; a large historical backlog must not starve current PRs.
+    let mut seen = BTreeSet::new();
+    let mut found = VecDeque::new();
+    for row in snapshot.details.values().rev() {
+        let mut urls = BTreeSet::new();
+        collect(row, &mut urls);
+        for url in urls {
+            if seen.insert(url.clone()) {
+                found.push_back(url);
+            }
+        }
     }
     let client = Client::builder()
         .timeout(Duration::from_secs(20))
@@ -138,36 +147,51 @@ fn pull_images(store: &Store, snapshot: &Snapshot) -> Result<Value> {
         }))
         .build()?;
     let start = Instant::now();
-    let (mut downloaded, mut cached) = (0, 0);
-    let mut failures = Vec::new();
-    for url in &found {
-        let path = folder.join(key(url));
-        if path.is_file() {
-            cached += 1;
-            continue;
+    let queue = Mutex::new(found);
+    let results = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let (queue, results, client, folder) = (&queue, &results, &client, &folder);
+            scope.spawn(move || loop {
+                let Some(url) = queue.lock().unwrap().pop_front() else {
+                    break;
+                };
+                let path = folder.join(key(&url));
+                let result: Result<&str> = (|| {
+                    if path.is_file() {
+                        return Ok("cached");
+                    }
+                    // Reject unsupported hosts before classifying the remaining download backlog.
+                    if !allowed(&Url::parse(&url)?) {
+                        bail!("Only HTTPS GitHub-hosted images are downloaded");
+                    }
+                    if start.elapsed() >= Duration::from_secs(120) {
+                        return Ok("deferred");
+                    }
+                    let bytes = download(client, &url)?;
+                    let mut temporary = tempfile::NamedTempFile::new_in(folder)?;
+                    use std::io::Write;
+                    temporary.write_all(&bytes)?;
+                    temporary.as_file().sync_all()?;
+                    temporary.persist(&path)?;
+                    Ok("downloaded")
+                })();
+                results.lock().unwrap().push((url, result));
+            });
         }
-        let result = if start.elapsed() >= Duration::from_secs(120) {
-            Err(anyhow::anyhow!(
-                "Image pull time budget reached; retry next Pull"
-            ))
-        } else {
-            download(&client, url)
-        };
+    });
+    let (mut downloaded, mut cached, mut deferred) = (0, 0, 0);
+    let mut failures = Vec::new();
+    for (url, result) in results.into_inner().unwrap() {
         match result {
-            Ok(bytes) => {
-                let mut temporary = tempfile::NamedTempFile::new_in(&folder)?;
-                use std::io::Write;
-                temporary.write_all(&bytes)?;
-                temporary.as_file().sync_all()?;
-                temporary.persist(&path)?;
-                downloaded += 1;
-            }
-            Err(error) => {
-                failures.push(json!({"url":url,"error":error.to_string()}));
-            }
+            Ok("cached") => cached += 1,
+            Ok("downloaded") => downloaded += 1,
+            Ok(_) => deferred += 1,
+            Err(error) => failures.push(json!({"url":url,"error":error.to_string()})),
         }
     }
-    let report = json!({"downloaded":downloaded,"cached":cached,"failed":failures.len(),"failures":failures});
+    failures.sort_by(|a, b| a["url"].as_str().cmp(&b["url"].as_str()));
+    let report = json!({"downloaded":downloaded,"cached":cached,"deferred":deferred,"failed":failures.len(),"failures":failures});
     let mut temporary = tempfile::NamedTempFile::new_in(store.dir(&snapshot.full_name)?)?;
     serde_json::to_writer(&mut temporary, &report)?;
     temporary.persist(store.dir(&snapshot.full_name)?.join("image-report.json"))?;

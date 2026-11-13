@@ -2,7 +2,7 @@
 
 [← All Docs](README.md) · [Getting started](../README.md#getting-started--one-command)
 
-`ogh` v0.2.7 implements a focused subset of GitHub CLI commands for offline work.
+`ogh` v0.2.8 implements a focused subset of GitHub CLI commands for offline work.
 It is not a drop-in replacement for every `gh` command or flag. GitHub remains
 the source of truth. **Cached** means data from the last sync/preparation;
 **queued** means a durable local intention until reviewed Push confirms delivery.

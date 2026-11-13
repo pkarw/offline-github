@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Skill-contract read regressions against a local fixture, never real GitHub."""
-import base64,json,os,unittest
+import base64,hashlib,json,os,unittest
 import test_outbox
 
 class CliTests(unittest.TestCase):
@@ -19,6 +19,16 @@ class CliTests(unittest.TestCase):
  def save(self):self.path.write_text(json.dumps(self.s))
  def cmd(self,*args,ok=True):return self.f.cmd(*args,ok=ok,env=self.env)
  def j(self,*args):return json.loads(self.cmd(*args).stdout)
+ def test_images_only_reuses_cache_without_metadata_or_git_fetch(self):
+  source='https://raw.githubusercontent.com/test/repo/main/image.png'
+  self.s['details']['1']['comments'].append({'body':f'![Screenshot]({source})'});self.save()
+  media=self.f.d/'cache/media';media.mkdir()
+  (media/hashlib.sha256(source.encode()).hexdigest()).write_bytes(b'\x89PNG\r\n\x1a\nfixture')
+  before=self.path.read_bytes();report=self.j('sync','--images-only')
+  self.assertEqual(report['cached'],1);self.assertEqual(report['downloaded'],0)
+  self.assertEqual(report['deferred'],0);self.assertEqual(report['failed'],0)
+  self.assertEqual(before,self.path.read_bytes())
+  self.assertFalse((self.f.d/'requests').exists(),'images-only must not fetch metadata')
  def test_agent_provider_advertises_reviewed_writes(self):
   status=self.j('skills','status')
   self.assertTrue(status['local_queue'])

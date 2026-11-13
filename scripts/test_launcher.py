@@ -23,15 +23,17 @@ with open(os.environ['DESKTOP_LOG'],'a') as f:f.write(json.dumps(sys.argv)+'\\n'
     with socket.socket() as occupied:
         occupied.bind(('127.0.0.1', 0)); occupied.listen()
         port = occupied.getsockname()[1]
+        server_cwd=fixture.d/'disposable-server-cwd';server_cwd.mkdir()
         with (fixture.d / 'http.log').open('w') as stream:
             server = subprocess.Popen([str(root/'target/debug/ogh'), 'serve', '--port', str(port),
                                        '--url-file', str(receipt), '--web-dir', str(root/'web/dist')],
-                                      env=env, stdout=stream, stderr=stream, start_new_session=True)
+                                      env=env, cwd=server_cwd, stdout=stream, stderr=stream, start_new_session=True)
         for _ in range(100):
             if receipt.exists(): break
             if server.poll() is not None: raise RuntimeError((fixture.d/'http.log').read_text())
             time.sleep(.05)
         url = receipt.read_text()
+        server_cwd.rmdir()  # Reproduce removal of the server's inherited checkout.
         assert url != f'http://127.0.0.1:{port}'
         def request(data=None, origin=None):
             headers={'Content-Type':'application/json'}
@@ -99,6 +101,14 @@ with open(os.environ['DESKTOP_LOG'],'a') as f:f.write(json.dumps(sys.argv)+'\\n'
         http('/api/repos',{'full_name':'test/repo'})
         assert len(http('/api/repos'))==1
         assert not snapshot.with_name('removed.json').exists()
+        # A second cached project must work even after the launch cwd disappeared.
+        http('/api/repos',{'full_name':'test/second'})
+        second=fixture.d/'cache/test/second/repo.git'
+        test_outbox.run('git','clone','--bare',fixture.mirror,second)
+        assert len(http('/api/repos'))==2
+        assert isinstance(http('/api/repos/test/second/open')['workspaces'],list)
+        assert request()['checkout_exists']
+        print('Two-project launcher works after deletion of the server working directory.')
         print('Labels and safe removal passed: issue/PR filtering, pending/dirty warnings, confirmation, retained files/outbox, add restores.')
         print('Launcher passed: occupied port, actual browser URL, safe worktree creation, path validation, quoted paths, cross-origin rejection; all desktop commands stubbed.')
 finally:

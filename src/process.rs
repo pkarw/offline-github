@@ -20,6 +20,9 @@ pub fn run(program: &str, args: &[&str], seconds: u64) -> Result<String> {
     let deadline = Instant::now() + Duration::from_secs(seconds);
     let mut command = Command::new(program);
     command
+        // A long-running server may outlive the checkout it was launched from.
+        // Preserve normal CLI cwd semantics, but never inherit a deleted directory.
+        .current_dir(std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir()))
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GH_PROMPT_DISABLED", "1")
