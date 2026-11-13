@@ -8,7 +8,8 @@ export type Repo = {
   path: string;
 };
 export type Item = {
-  number: number;
+  number: number | string;
+  local_target?: string;
   title: string;
   body: string | null;
   state: string;

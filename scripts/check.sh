@@ -9,6 +9,7 @@ cargo build --locked
 # Server integration tests require built frontend assets on clean checkouts.
 npm --prefix web ci
 npm --prefix web run build
+node scripts/test_local_items.cjs
 python3 scripts/smoke.py
 python3 scripts/test_outbox.py
 python3 scripts/test_cli.py

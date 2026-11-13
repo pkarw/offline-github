@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { api, type Detail } from "./api";
+import { itemTarget } from "./local-items";
 import { Button } from "./ui";
 export type Event = {
   id: string;
@@ -13,7 +14,7 @@ export type Event = {
   observed: unknown;
   status: string;
   error: string | null;
-  remote: { id?: number; html_url?: string } | null;
+  remote: { number?: number; id?: number; html_url?: string } | null;
   history: { at: string; action: string; data: unknown }[];
   created_at: string;
 };
@@ -358,7 +359,7 @@ export function LocalDiscussion({
         body: JSON.stringify({
           repo,
           kind: "comment",
-          target: String(detail.item.number),
+          target: itemTarget(detail.item),
           payload: { body },
           client_id: clientId,
         }),

@@ -39,7 +39,7 @@ still identifies your server). Restart with `ogh serve`.
 ## Prerequisites
 
 - **macOS Apple Silicon:** Homebrew; missing Git, GitHub CLI, jq, Python and Node
-  22 are installed using Brew. The app uses the checksummed v0.2.8 binary bundle,
+  22 are installed using Brew. The app uses the checksummed v0.2.9 binary bundle,
   so Rust is unnecessary.
 - **Other macOS/Linux:** Git, curl, GitHub CLI, jq, Python 3, Node.js 22+ and its
   npm, plus a native C build toolchain, pkg-config and OpenSSL development files.

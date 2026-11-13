@@ -81,13 +81,59 @@ const fs=require('fs');const path=require('path');
  await page.getByRole('button',{name:/Issues/}).click();
  await page.getByLabel('Filter by label').selectOption('airplane');await expect(page.locator('.item-row')).toHaveCount(1);
  await page.getByLabel('Filter by label').selectOption('');
+ // New offline issues and PRs are first-class local discussions, including reloads.
+ async function createDraft(kind,title) {
+   await page.getByRole('button',{name:kind==='pr'?'New pull request':'New issue',exact:true}).click();
+   const dialog=page.getByRole('dialog');
+   await dialog.getByLabel('Title',{exact:true}).fill(title);
+   await dialog.getByLabel('Body',{exact:true}).fill('Local draft description');
+   if(kind==='pr'){await dialog.getByLabel('Head',{exact:true}).fill('main');await dialog.getByLabel('Base',{exact:true}).fill('main');}
+   await dialog.getByRole('button',{name:'Queue change',exact:true}).click();
+   await expect(dialog).toBeHidden();
+   if(kind==='pr')await page.goto(base+'/test/repo/pulls');
+   const row=page.locator('.item-row').filter({hasText:title});
+   await expect(row).toContainText('pending');await row.click();
+   await expect(page).toHaveURL(/local:[a-f0-9-]+$/);
+   await expect(page.locator('.detail')).toContainText('GitHub assigns a number after Push');
+   await page.getByLabel('Add a comment to the local queue').fill(title+' comment');
+   await page.getByRole('button',{name:'Queue comment',exact:true}).click();
+   await expect(page.locator('.local-comment')).toContainText(title+' comment');
+   await page.reload();await expect(page.locator('.local-comment')).toContainText(title+' comment');
+ }
+ await createDraft('issue','Unpublished issue');
+ await page.getByRole('button',{name:'Add / remove labels',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Add',{exact:true}).fill('offline-new-label');
+ await page.getByRole('dialog').getByRole('button',{name:'Queue change',exact:true}).click();
+ await expect(page.locator('.detail .label')).toContainText('offline-new-label');
+ await page.getByRole('button',{name:'Edit title and body',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Title',{exact:true}).fill('Revised unpublished issue');
+ await page.getByRole('dialog').getByRole('button',{name:'Queue change',exact:true}).click();
+ await expect(page.locator('.detail h2')).toContainText('Revised unpublished issue');
+ await page.getByRole('button',{name:'Back to issues',exact:true}).click();
+ await page.getByLabel('Filter by label').selectOption('offline-new-label');
+ await expect(page.locator('.item-row')).toHaveCount(1);
+ await expect(page.locator('.item-row')).toContainText('Revised unpublished issue');
+ await page.getByLabel('Filter by label').selectOption('');
+ await page.getByLabel('Search cached items').fill('Revised unpublished');
+ await expect(page.locator('.item-row')).toHaveCount(1);
+ await page.getByLabel('Search cached items').fill('');
+ await createDraft('pr','Unpublished PR');
+ await page.goto(base+'/test/repo/pulls');
+ await expect(page.locator('.item-row').filter({hasText:'Unpublished PR'})).toHaveCount(1);
+ await page.screenshot({path:path.join(artifacts,'local-pr-draft.png')});
+ // Local comments/labels/edits retain automatic creation dependencies.
+ const queue=await (await context.request.get(base+'/api/outbox?repo=test/repo')).json();
+ const issue=queue.events.find(e=>e.kind==='issue_create'&&e.payload.title==='Unpublished issue');
+ const children=queue.events.filter(e=>e.target==='local:'+issue.id);
+ if(children.length!==3)throw Error('Draft updates lost their durable local target');
+ if(children.some(e=>!e.depends_on.includes(issue.id)))throw Error('Draft update missing publication dependency');
  await page.getByLabel('Project options',{exact:true}).click();await page.getByRole('button',{name:'Remove offline repo…',exact:true}).click();
- await expect(page.getByRole('dialog')).toContainText('1 outgoing changes have not been pushed');
+ await expect(page.getByRole('dialog')).toContainText('7 outgoing changes have not been pushed');
  await page.screenshot({path:path.join(artifacts,'remove-preview.png')});
  await page.getByRole('button',{name:'Remove from app',exact:true}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.repo-link')).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(300);if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Outgoing mobile horizontal overflow');await page.screenshot({path:path.join(artifacts,'outgoing-mobile.png')});
  if(errors.length||external.length)throw Error(JSON.stringify({errors,external}));
- console.log(JSON.stringify({passed:['exact number search including closed items','issue and PR deep links, reload, back and forward','HTTP enqueue with lost local reply idempotency','unsubmitted browser draft recovery','pending comment/label markers','reload durability','JSON/MD downloads','bound preview and explicit fake send','applied history','confirmed comment deduplication','remote conflict preserved','mobile layout','no external requests'],errors,external},null,2));
+ console.log(JSON.stringify({passed:['exact number search including closed items','issue and PR deep links, reload, back and forward','HTTP enqueue with lost local reply idempotency','unsubmitted browser draft recovery','pending comment/label markers','local issue/PR drafts with comments, labels, edits and durable URLs','reload durability','JSON/MD downloads','bound preview and explicit fake send','applied history','confirmed comment deduplication','remote conflict preserved','mobile layout','no external requests'],errors,external},null,2));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

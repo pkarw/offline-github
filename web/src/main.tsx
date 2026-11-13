@@ -52,6 +52,7 @@ import {
   type Outbox,
   type Event as OutboxEvent,
 } from "./outbox";
+import { localItems, localDetail, itemTarget, itemNumber, itemEvents } from "./local-items";
 const date = (s?: string | null) =>
   s
     ? new Date(s).toLocaleString(undefined, {
@@ -134,7 +135,7 @@ function App() {
     [query, setQuery] = useState(""),
     [label, setLabel] = useState(""),
     [labels, setLabels] = useState<string[]>([]),
-    [number, setNumber] = useState<number | null>(initialRoute.number),
+    [number, setNumber] = useState<number | string | null>(initialRoute.number),
     [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -175,6 +176,13 @@ function App() {
   }, [selected, version, syncing]);
   useEffect(() => { setLabel(""); setLabels([]); }, [selected]);
   useEffect(() => { if (!selected) return; let current = true; api<string[]>(repoUrl(selected) + "/labels").then(v => { if (current) setLabels(v); }).catch(e => { if (current) setError(e.message); }); return () => { current = false; }; }, [selected, version]);
+  const drafts = localItems(outbox.events, items, repos.find(r => r.full_name === selected)?.last_sync);
+  const visibleItems = [...drafts.filter(i => Boolean(i.pull_request) === (page === "pr") &&
+    (state === "all" || state === i.state) && (!label || i.labels?.some(l => l.name === label)) &&
+    (!query || (numberQuery(query) ? String(i.number) === query.trim().replace(/^(?:#|number:)/, "") : `${i.title} ${i.body}`.toLowerCase().includes(query.toLowerCase())))), ...items];
+  const localCreation = typeof number === "string" ? outbox.events.find(e => `local:${e.id}` === number) : undefined;
+  const localItem = typeof number === "string" ? localItems(outbox.events, []).find(i => i.local_target === number) : undefined;
+  const shownDetail = localCreation?.remote?.number && detail ? detail : localItem ? localDetail(localItem) : detail;
   const outgoingCount = outbox.events.filter(pending).length;
   const repo = repos.find((r) => r.full_name === selected);
   async function loadRepos() {
@@ -227,7 +235,9 @@ function App() {
     setLoading(true);
     setError("");
     setDetail(null);
-    api<Detail>(`${repoUrl(selected)}/items/${number}`)
+    const remoteNumber = typeof number === "string" ? localCreation?.remote?.number : number;
+    if (!remoteNumber || (localCreation && !items.some(i => i.number === remoteNumber))) { setLoading(false); return; }
+    api<Detail>(`${repoUrl(selected)}/items/${remoteNumber}`)
       .then((d) => {
         if (current) setDetail(d);
       })
@@ -240,7 +250,7 @@ function App() {
     return () => {
       current = false;
     };
-  }, [selected, number, version]);
+  }, [selected, number, version, localCreation?.remote?.number, items]);
   async function openSearchNumber() {
     if (!numberQuery(query) || !selected) return;
     const target = Number(query.trim().replace(/^(?:#|number:)/, ""));
@@ -522,14 +532,13 @@ function App() {
                   {loading ? (
                     <div className="loading">Loading discussion…</div>
                   ) : (
-                    detail && (
+                    shownDetail && (
                       <ItemDetail
-                        detail={detail}
+                        key={String(number)}
+                        detail={shownDetail}
                         repo={selected}
                         isPr={page === "pr"}
-                        events={outbox.events.filter(
-                          (e) => e.target === String(number),
-                        )}
+                        events={itemEvents(shownDetail.item, outbox.events)}
                         refresh={refreshOutbox}
                       />
                     )
@@ -572,7 +581,7 @@ function App() {
                         </button>
                       ))}
                     </div>
-                    <select className="label-filter" aria-label="Filter by label" value={label} onChange={e => setLabel(e.target.value)}><option value="">All labels</option>{labels.map(name => <option key={name} value={name}>{name}</option>)}</select>
+                    <select className="label-filter" aria-label="Filter by label" value={label} onChange={e => setLabel(e.target.value)}><option value="">All labels</option>{[...new Set([...labels, ...drafts.flatMap(i => i.labels?.map(l => l.name) || [])])].sort().map(name => <option key={name} value={name}>{name}</option>)}</select>
                     <label className="search">
                       <Search size={16} />
                       <input
@@ -595,7 +604,7 @@ function App() {
                   <div className="item-list">
                     {loading ? (
                       <div className="loading">Loading your local cache…</div>
-                    ) : items.length === 0 ? (
+                    ) : visibleItems.length === 0 ? (
                       <Empty
                         title={
                           query ? "No matching results" : "Nothing here yet"
@@ -606,11 +615,11 @@ function App() {
                           : "Pull from GitHub to download its latest issues and pull requests."}
                       </Empty>
                     ) : (
-                      items.map((i) => (
+                      visibleItems.map((i) => (
                         <button
                           className="item-row"
-                          key={i.number}
-                          onClick={() => navigate({ repo: selected, page: i.pull_request ? "pr" : "issue", number: i.number })}
+                          key={itemTarget(i)}
+                          onClick={() => navigate({ repo: selected, page: i.pull_request ? "pr" : "issue", number: i.local_target || i.number })}
                         >
                           {page === "pr" ? (
                             <GitPullRequest
@@ -637,7 +646,7 @@ function App() {
                               {outbox.events
                                 .filter(
                                   (e) =>
-                                    e.target === String(i.number) && pending(e),
+                                    (e.target === itemTarget(i) || e.id === i.local_target?.slice(6)) && pending(e),
                                 )
                                 .map((e) => (
                                   <Marker key={e.id} event={e} />
@@ -656,7 +665,7 @@ function App() {
                               ))}
                             </div>
                             <small>
-                              #{i.number} · {i.user?.login || "Unknown author"}{" "}
+                              {itemNumber(i)} · {i.user?.login || "Unknown author"}{" "}
                               · updated {date(i.updated_at)}
                             </small>
                           </div>
@@ -673,7 +682,7 @@ function App() {
                   </div>
                   <div className="list-footer">
                     <span>
-                      {items.length} cached{" "}
+                      {visibleItems.length} local and cached{" "}
                       {page === "pr" ? "pull requests" : "issues"}
                     </span>
                     <span>Pull downloads updates. Push sends reviewed local changes.</span>
@@ -802,8 +811,9 @@ function ItemDetail({
   return (
     <article className="detail">
       <h2>
-        {d.item.title} <span>#{d.item.number}</span>
+        {d.item.title} <span>{itemNumber(d.item)}</span>
       </h2>
+      {typeof d.item.number === "string" && <p className="muted">Local draft · saved in Outgoing. GitHub assigns a number after Push.</p>}
       <div className="detail-meta">
         <span className={"status " + (d.item.merged_at ? "merged" : "")}>
           {d.item.merged_at ? "Merged" : d.item.draft ? "Draft" : d.item.state}
@@ -818,10 +828,11 @@ function ItemDetail({
         )}
       </div>
       <div className="queue-actions">
+        {events.filter(e => ["issue_create", "pr_create"].includes(e.kind)).map(e => <Marker key={e.id} event={e} />)}
         <QueueDialog
           repo={repo}
           kind="edit"
-          target={String(d.item.number)}
+          target={itemTarget(d.item)}
           initial={{
             title: d.item.title,
             body: d.item.body || "",
@@ -834,7 +845,7 @@ function ItemDetail({
         <QueueDialog
           repo={repo}
           kind="labels"
-          target={String(d.item.number)}
+          target={itemTarget(d.item)}
           refresh={refresh}
         >
           Add / remove labels
@@ -858,7 +869,7 @@ function ItemDetail({
             <pre>{JSON.stringify(e.payload, null, 2)}</pre>
           </div>
         ))}
-      {isPr && (
+      {isPr && typeof d.item.number === "number" && (
         <div className="checkout">
           <div>
             <GitBranch size={17} />

@@ -15,7 +15,7 @@ Your repositories, issues and pull requests at 35,000 feet. A **Rust + React + s
 - 🗂️ Multiple repositories, issues/PRs searchable by text or #number, shareable local URLs, discussions and source browsing.
 - 🖼️ GitHub-hosted comment screenshots downloaded on Pull and displayed offline.
 - 🌳 Full Git history, branches, tags and available PR heads. Isolated worktrees for testing.
-- ✍️ Offline comments, issue/PR drafts, label changes and review drafts in a durable SQLite outbox.
+- ✍️ Offline comments, issue/PR drafts, label changes and review drafts in a durable SQLite outbox. New issues and PRs appear immediately in their tabs with pending markers; open them to add comments, labels and edits before Push. Local draft links survive reloads, and GitHub assigns the public number after Push.
 - 🟠 Visible pending, sending, conflicted, failed and uncertain markers beside local work.
 - 🔄 Separate Pull from GitHub and reviewed Push, with conflict handling.
 - 🧾 Permanent outgoing history with JSON/Markdown exports for you or an agent.
