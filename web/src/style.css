@@ -1350,3 +1350,20 @@ textarea {
 }
 
 .notice-warning { background: #2d2513; border-color: #5b451b; color: #facc6b; }
+
+.repo-launcher { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:-8px 0 24px; padding:14px 16px; border:1px solid var(--border); border-radius:10px; background:var(--card); }
+.checkout-path { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+.checkout-path > div { min-width:0; }
+.checkout-path small { display:block; color:var(--muted-foreground); font-size:11px; margin-bottom:3px; }
+.checkout-path code { font-size:12px; overflow-wrap:anywhere; user-select:all; }
+.checkout-path select { max-width:100%; background:var(--card); color:inherit; border:1px solid var(--border); padding:5px; border-radius:5px; }
+.open-dropdown { position:relative; }
+.open-dropdown summary { display:flex; align-items:center; gap:8px; cursor:pointer; list-style:none; padding:9px 13px; border:1px solid var(--border); border-radius:7px; font-size:13px; font-weight:600; }
+.open-dropdown summary::-webkit-details-marker { display:none; }
+.open-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:30; width:270px; max-width:calc(100vw - 48px); background:#191b19; border:1px solid var(--border); border-radius:9px; box-shadow:0 12px 35px #0006; padding:6px; }
+.open-menu > small { display:block; padding:7px 9px; color:var(--muted-foreground); font-size:11px; }
+.open-menu button { display:flex; flex-wrap:wrap; align-items:center; gap:6px; width:100%; border:0; color:inherit; background:transparent; text-align:left; padding:10px; border-radius:5px; cursor:pointer; }
+.open-menu button:hover:enabled { background:#ffffff12; }
+.open-menu button:disabled { opacity:.45; cursor:default; }
+.open-menu button small { width:100%; font-size:11px; }
+.launch-message { width:100%; color:var(--muted-foreground); overflow-wrap:anywhere; }

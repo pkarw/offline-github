@@ -9,7 +9,7 @@ try:
  with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
  url=f'http://127.0.0.1:{port}'
  log=(fixture.d/'server.log').open('w')
- server=subprocess.Popen([str(root/'target/debug/ogh'),'serve','--port',str(port),'--web-dir',str(root/'web/dist')],env=fixture.env,stdout=log,stderr=log,start_new_session=True)
+ server=subprocess.Popen([str(root/'target/debug/ogh'),'serve','--no-browser','--port',str(port),'--web-dir',str(root/'web/dist')],env=fixture.env,stdout=log,stderr=log,start_new_session=True)
  for attempt in range(80):
   try:
    with urllib.request.urlopen(url+'/api/health',timeout=1) as r:assert r.status==200

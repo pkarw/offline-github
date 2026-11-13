@@ -99,7 +99,7 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(helper.is_symlink())
         self.assertTrue(next(folder.glob('ogh-sandbox.backup.*/ogh-sandbox')).is_symlink())
 
-    def test_custom_cache_reentry_and_wrong_cache_rejected(self):
+    def test_custom_cache_reentry_and_same_cache_reused(self):
         import io
         cache = str(self.root / 'custom cache')
         def response(data_dir):
@@ -109,9 +109,8 @@ class SetupTests(unittest.TestCase):
                 finish.finish(self.work, self.root / 'state', 4181)
             helper = (self.root / '.local/bin/ogh-work').read_text()
             self.assertIn("export OGH_DATA_DIR='" + cache + "'", helper)
-            with patch('urllib.request.urlopen', return_value=response('/other/cache')):
-                with self.assertRaisesRegex(RuntimeError, 'different or unverifiable cache'):
-                    finish.finish(self.work, self.root / 'state', 4181)
+            self.assertEqual((self.root / 'state/server.url').read_text(), 'http://127.0.0.1:4181')
+            self.assertFalse((self.root / 'state/server.pid').exists())
 
     def test_rapid_reconfiguration_backups_never_collide(self):
         with patch.object(configure.time, 'strftime', return_value='fixed-clock'):
@@ -203,24 +202,32 @@ class SetupTests(unittest.TestCase):
             subprocess.run(['bash', '-n', str(ROOT / 'scripts' / script)], check=True, timeout=10)
         text = (ROOT / 'scripts/sandbox.sh').read_text()
         self.assertIn('127.0.0.1:$OGH_SANDBOX_PORT:4173', text)
-        self.assertIn('TCP:127.0.0.1:4174', text)
+        self.assertIn('server.url', text)
         self.assertNotIn('--replace', text)
         self.assertNotIn('$HOME:/root', text)
 
-    def test_no_server_success_on_foreign_listener(self):
-        # The launcher must not declare a foreign service to be an ogh server.
+    def test_foreign_listener_falls_back_to_actual_url(self):
         import socket
         with socket.socket() as sock:
-            sock.bind(('127.0.0.1', 0))
-            sock.listen()
+            sock.bind(('127.0.0.1', 0)); sock.listen()
             port = sock.getsockname()[1]
-            env = dict(os.environ, HOME=str(self.root), OGH_DATA_DIR=str(self.root / 'cache'))
-            result = subprocess.run(['python3', str(ROOT / 'scripts/setup/finish.py'),
-                                     str(self.work), str(self.root / 'state'), str(port)],
-                                    env=env, capture_output=True, text=True, timeout=8)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('Address already in use', result.stderr)
-            self.assertFalse((self.root / 'state/server.pid').exists())
+            cache = self.root / 'cache'
+            env = dict(os.environ, HOME=str(self.root), OGH_DATA_DIR=str(cache),
+                       PATH=str(ROOT / 'target/debug') + os.pathsep + os.environ['PATH'],
+                       OGH_WEB_DIR=str(ROOT / 'web/dist'))
+            state = self.root / 'state'
+            try:
+                result = subprocess.run(['python3', str(ROOT / 'scripts/setup/finish.py'),
+                                         str(self.work), str(state), str(port)],
+                                        env=env, capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                url = (state / 'server.url').read_text()
+                self.assertNotEqual(url, f'http://127.0.0.1:{port}')
+                with finish.urllib.request.urlopen(url + '/api/health', timeout=2) as response:
+                    self.assertEqual(json.load(response)['data_dir'], str(cache))
+            finally:
+                if (state / 'server.pid').exists():
+                    os.kill(int((state / 'server.pid').read_text()), 15)
 
 
 if __name__ == '__main__':

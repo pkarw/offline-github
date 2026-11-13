@@ -43,7 +43,7 @@ The installer downloads/builds `ogh`, starts the local browser app, caches
 It opens a shell **inside your project**. Run `pi`, `codex` or `claude` there
 (using whichever agent you already have installed and signed into).
 
-Open **http://127.0.0.1:4173**. Next time, enter the same project with:
+Your browser opens automatically. The app normally uses **http://127.0.0.1:4173**; if occupied, it chooses a free port and prints the actual URL. Next time, enter the same project with:
 
 ```bash
 ~/.local/bin/ogh-work
@@ -97,6 +97,10 @@ The app opens at **http://127.0.0.1:4183**. Return later with
 
 *Queue/conflict screenshots use isolated test fixtures; no test changes were posted to real GitHub.*
 ![PR diff](docs/screenshots/pull-request.png)
+The web UI shows the local checkout path. Use **Open ▾** to launch installed
+Claude Code, Codex CLI, ogh CLI or Terminal in that checkout. Unavailable tools
+are disabled; **Refresh detection** checks again after installing a tool.
+
 ![Local source browser](docs/screenshots/source.png)
 <img src="docs/screenshots/mobile.png" width="320" alt="Mobile workspace" />
 

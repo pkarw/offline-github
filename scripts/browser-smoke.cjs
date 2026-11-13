@@ -8,7 +8,20 @@ const fs=require('fs');const path=require('path');
  await context.route('**/*',r=>r.request().url().startsWith(base+'/')?r.continue():(external.push(r.request().url()),r.abort()));
  const page=await context.newPage();page.on('pageerror',e=>errors.push(String(e)));
  const artifacts=process.env.OGH_TEST_ARTIFACTS;fs.mkdirSync(artifacts,{recursive:true});
+ // Mock launch only: never open a real agent or desktop during browser QA.
+ const launchPath='/tmp/offline project';let launched;
+ await page.route('**/api/repos/test/repo/open',async route=>{
+   if(route.request().method()==='POST') { launched=route.request().postDataJSON(); await route.fulfill({json:{message:'Launch requested in a local terminal'}}); }
+   else await route.fulfill({json:{path:launchPath,workspaces:[launchPath],checkout_exists:true,tools:[{id:'claude',label:'Claude Code',available:false,reason:'Command not found on the server PATH'},{id:'codex',label:'Codex CLI',available:true,reason:''},{id:'ogh',label:'ogh CLI',available:true,reason:''},{id:'terminal',label:'Terminal',available:true,reason:''}]}});
+ });
  await page.goto(base);
+ await expect(page.locator('.checkout-path')).toContainText(launchPath);
+ await page.getByLabel('Open repository').click();
+ await expect(page.getByRole('button',{name:'Claude Code'})).toBeDisabled();
+ await page.getByRole('button',{name:'Codex CLI',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'Launch requested'})).toBeVisible();
+ if(launched?.tool!=='codex'||launched?.path!==launchPath)throw Error('Wrong launch target');
+ await page.screenshot({path:path.join(artifacts,'local-launcher.png')});
  await expect(page.locator('.item-row').first()).toBeVisible({timeout:20000});await page.locator('.item-row').first().click();
  await page.getByLabel('Add a comment to the local queue').fill('Offline browser notes: preserve this comment.');
  await page.reload();await expect(page.locator('.item-row').first()).toBeVisible();await page.locator('.item-row').first().click();

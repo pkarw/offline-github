@@ -104,8 +104,8 @@ fi
 # Apple Silicon users need no Rust build. Validate the release checksum before installation.
 if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ]; then
   bundle="$(mktemp -d "$OGH_SETUP_ROOT/bundle.XXXXXX")"
-  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.1/offline-github-macos-arm64.tgz
-  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.1/SHA256SUMS.txt
+  curl --fail --location --retry 3 -o "$bundle/app.tgz" https://github.com/pkarw/offline-github/releases/download/v0.2.2/offline-github-macos-arm64.tgz
+  curl --fail --location --retry 3 -o "$bundle/SHA256SUMS.txt" https://github.com/pkarw/offline-github/releases/download/v0.2.2/SHA256SUMS.txt
   expected="$(awk '$2 == "offline-github-macos-arm64.tgz" {print $1}' "$bundle/SHA256SUMS.txt")"
   actual="$(shasum -a 256 "$bundle/app.tgz" | awk '{print $1}')"
   [ -n "$expected" ] && [ "$actual" = "$expected" ] || { echo 'Bundle checksum mismatch' >&2; exit 1; }
@@ -159,8 +159,12 @@ echo '🤖 Installing project skills for ogh…'
 python3 "$source_dir/scripts/setup/configure.py" "$OGH_WORKSPACE" "$skills_dir" "$source_dir" --repo "$OGH_SETUP_REPO"
 # Helper enters the project, exports PATH/repo, then starts an interactive user shell.
 python3 "$source_dir/scripts/setup/finish.py" "$OGH_WORKSPACE" "$OGH_SETUP_ROOT" "$OGH_SETUP_PORT"
-if [ "$OGH_SETUP_OPEN" = 1 ] && command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SETUP_PORT"; fi
-printf '\n✅ Ready! App: http://127.0.0.1:%s\nProject: %s\n' "$OGH_SETUP_PORT" "$OGH_WORKSPACE"
+app_url="$(cat "$OGH_SETUP_ROOT/server.url")"
+if [ "$OGH_SETUP_OPEN" = 1 ]; then
+  if command -v open >/dev/null; then open "$app_url" || true
+  elif command -v xdg-open >/dev/null; then xdg-open "$app_url" || true; fi
+fi
+printf '\n✅ Ready! App: %s\nProject: %s\n' "$app_url" "$OGH_WORKSPACE"
 echo 'Start pi, codex or claude here. Project skills use ogh; gh remains available for explicit online sync.'
 echo 'Project application dependencies/services are separate; follow its README to run the application.'
 if [ "$OGH_SETUP_SHELL" = 1 ]; then

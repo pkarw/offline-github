@@ -3,7 +3,6 @@
 import json
 import os
 import shlex
-import socket
 import subprocess
 import sys
 import time
@@ -48,34 +47,33 @@ def finish(workspace, root, port):
                f'export OGH_DATA_DIR={shlex.quote(data_dir)}\n'
                f'cd {shlex.quote(str(workspace))}\nexec "${{SHELL:-/bin/bash}}" -i\n')
     install_helper(launcher, content)
-    url = f'http://127.0.0.1:{port}/api/health'
+    url = f'http://127.0.0.1:{port}'
 
     def healthy():
         try:
-            with urllib.request.urlopen(url, timeout=2) as response:
+            with urllib.request.urlopen(url + '/api/health', timeout=.5) as response:
                 data = json.load(response)
-            if data.get('status') == 'ok' and data.get('outgoing_queue') is True:
-                if data.get('data_dir') != data_dir:
-                    raise RuntimeError(f'Port {port} serves a different or unverifiable cache; choose OGH_SETUP_PORT or stop that server.')
-                return True
-            return False
+            return (data.get('status') == 'ok' and data.get('outgoing_queue') is True
+                    and data.get('data_dir') == data_dir)
         except (OSError, ValueError):
             return False
 
-    if healthy():
-        print(f'Reusing existing ogh server on {port}.')
-        return
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('127.0.0.1', port))  # Refuse to replace an unrelated listener.
     root.mkdir(parents=True, exist_ok=True)
+    receipt = root / 'server.url'
+    if healthy():
+        receipt.write_text(url)
+        print(f'Reusing existing ogh server at {url}.')
+        return
+    receipt.unlink(missing_ok=True)
     with (root / 'server.log').open('ab') as log:
-        process = subprocess.Popen(['ogh', 'serve', '--port', str(port)], cwd=workspace,
+        process = subprocess.Popen(['ogh', 'serve', '--port', str(port), '--no-browser', '--url-file', str(receipt)], cwd=workspace,
                                    stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                    start_new_session=True)
     (root / 'server.pid').write_text(str(process.pid) + '\n')
     for _ in range(40):
-        if healthy():
+        if receipt.exists():
+            url = receipt.read_text().strip()
+        if receipt.exists() and healthy():
             print(f'Started ogh server (PID {process.pid}, log {root / "server.log"}).')
             return
         if process.poll() is not None:

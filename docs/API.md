@@ -16,3 +16,12 @@ CLI reads/checkout: ogh repo add owner/repo; ogh sync [-R owner/repo]; ogh issue
 
 
 Global CLI supports `--repo`/`-R`, `OGH_REPO`, gh-style `--json FIELD,...` and `--jq`, skill preparation/status, installed app assets and a durable outgoing queue. See README and OUTBOX.md. Read endpoints and `/api/repos/:o/:r/sync` remain incoming-only. Health reports `mode: offline_first` and `outgoing_queue: true`.
+
+
+Local launch endpoints (same-origin localhost only):
+
+- `GET /api/repos/:owner/:repo/open`: checkout path, registered worktrees and detected tools with availability reasons.
+- `POST /api/repos/:owner/:repo/open`: `{tool:"claude"|"codex"|"ogh"|"terminal",path?:string}`. Only registered worktrees of this repository are accepted; when none exist, a new working checkout can be created at the advertised path. Returns the requested target/path. No arbitrary commands are accepted.
+
+`ogh serve` falls back to a random loopback port when the requested port is occupied,
+opens the actual URL, and accepts `--no-browser` and `--url-file <path>` for launchers.

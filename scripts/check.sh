@@ -10,6 +10,7 @@ python3 scripts/smoke.py
 python3 scripts/test_outbox.py
 python3 scripts/test_cli.py
 python3 scripts/test_setup.py
+python3 scripts/test_launcher.py
 npm --prefix web ci
 npm --prefix web run build
 

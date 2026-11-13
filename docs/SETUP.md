@@ -24,7 +24,7 @@ Claude, Codex and pi discovery directories. Skills carry an explicit ogh
 transport instruction; the real `gh` binary is not replaced or aliased.
 
 It starts `ogh serve` in the background and verifies its health endpoint before
-reporting success. Open http://127.0.0.1:4173. The server PID and output are in
+reporting success. Your browser opens at the actual local URL (normally http://127.0.0.1:4173). The server PID and output are in
 `~/.local/share/ogh-setup/server.pid` and `server.log`. Stop only that PID when
 finished (`kill "$(cat ~/.local/share/ogh-setup/server.pid)"` after checking it
 still identifies your server). Restart with `ogh serve`.
@@ -32,7 +32,7 @@ still identifies your server). Restart with `ogh serve`.
 ## Prerequisites
 
 - **macOS Apple Silicon:** Homebrew; missing Git, GitHub CLI, jq, Python and Node
-  22 are installed using Brew. The app uses the checksummed v0.2.1 binary bundle,
+  22 are installed using Brew. The app uses the checksummed v0.2.2 binary bundle,
   so Rust is unnecessary.
 - **Other macOS/Linux:** Git, curl, GitHub CLI, jq, Python 3, Node.js 22+ and its
   npm, plus a native C build toolchain, pkg-config and OpenSSL development files.
@@ -127,6 +127,24 @@ installer source checkout refuses to update with local changes. An existing
 skills clone is reused; refresh it deliberately and rerun to update copies.
 
 If port 4173 belongs to a healthy ogh server using the same cache, setup reuses it.
-A different cache, older unverifiable server or unrelated listener causes a clear error; choose another port. Check `server.log` on a
+A different cache, older unverifiable server or unrelated listener is left alone;
+a new server starts on a random free port. The actual URL is printed and saved
+in `~/.local/share/ogh-setup/server.url`. Standalone `ogh serve` also chooses a
+free port and opens the browser; use `--no-browser` on headless machines. Check `server.log` on a
 startup failure. An interrupted initial download can be rerun; an unrecognized
 partial worktree is preserved and requires a new destination or manual inspection.
+
+
+### 📂 Open the checkout from the app
+
+The repository header shows its full local working path. **Open ▾** lists Claude
+Code (`claude`), Codex CLI (`codex`), ogh CLI and Terminal. Commands are detected
+on the server's PATH. Refresh detection after installing a tool; restart the
+server if its PATH changed. If several Git worktrees exist, select the checkout
+before opening. If only a bare cache exists, opening creates a named local branch
+and working checkout under `<data-dir>/workspaces/owner/repo`.
+
+Launches use Terminal on macOS, or an available desktop terminal on Linux.
+The new shell retains the repository and cache identity. In a headless VM or
+Microsandbox, desktop launching is unavailable: enter with `ogh-sandbox` and
+start your agent there. The browser cannot launch host tools from a guest.

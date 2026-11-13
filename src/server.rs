@@ -201,7 +201,55 @@ async fn resolve_outgoing(
     })
     .await
 }
-pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> {
+#[derive(Deserialize)]
+struct Launch {
+    tool: String,
+    path: Option<String>,
+}
+async fn launch_context(State(s): State<Store>, Path((o, r)): Path<(String, String)>) -> ApiResult {
+    blocking(move || crate::launcher::context(&s, &format!("{o}/{r}"))).await
+}
+async fn launch(
+    State(s): State<Store>,
+    Path((o, r)): Path<(String, String)>,
+    Json(input): Json<Launch>,
+) -> ApiResult {
+    blocking(move || {
+        crate::launcher::open(&s, &format!("{o}/{r}"), &input.tool, input.path.as_deref())
+    })
+    .await
+}
+async fn bind(port: u16) -> std::io::Result<tokio::net::TcpListener> {
+    match tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await {
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!("Port {port} is occupied; selecting a free port…");
+            tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await
+        }
+        result => result,
+    }
+}
+pub fn open_browser(url: &str) {
+    let url = url.to_owned();
+    std::thread::spawn(move || {
+        let program = if cfg!(target_os = "macos") {
+            "open"
+        } else if cfg!(target_os = "windows") {
+            "explorer.exe"
+        } else {
+            "xdg-open"
+        };
+        if let Err(error) = crate::process::run(program, &[&url], 15) {
+            eprintln!("Open {url} in your browser ({error})");
+        }
+    });
+}
+pub async fn serve(
+    store: Store,
+    port: u16,
+    web: PathBuf,
+    no_browser: bool,
+    url_file: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let index = web.join("index.html");
     anyhow::ensure!(
         index.exists(),
@@ -220,6 +268,7 @@ pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> 
         .route("/api/outbox/{id}/resolve", post(resolve_outgoing))
         .route("/api/repos", get(repos).post(add))
         .route("/api/repos/{o}/{r}/sync", post(sync_repo))
+        .route("/api/repos/{o}/{r}/open", get(launch_context).post(launch))
         .route("/api/repos/{o}/{r}/items", get(items))
         .route("/api/repos/{o}/{r}/items/{n}", get(detail))
         .route("/api/repos/{o}/{r}/tree", get(tree))
@@ -227,12 +276,31 @@ pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> 
         .fallback_service(ServeDir::new(web).not_found_service(ServeFile::new(index)))
         .with_state(store)
         .layer(middleware::from_fn(guard));
-    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
-    eprintln!("Offline GitHub → http://127.0.0.1:{port} (Ctrl-C to stop)");
+    let listener = bind(port).await?;
+    let url = format!("http://{}", listener.local_addr()?);
+    if let Some(path) = url_file {
+        std::fs::write(path, &url)?;
+    }
+    eprintln!("Offline GitHub → {url} (Ctrl-C to stop)");
+    if !no_browser {
+        open_browser(&url);
+    }
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             tokio::signal::ctrl_c().await.ok();
         })
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn occupied_port_uses_another_listener() {
+        let occupied = super::bind(0).await.unwrap();
+        let port = occupied.local_addr().unwrap().port();
+        let next = super::bind(port).await.unwrap();
+        assert_ne!(next.local_addr().unwrap().port(), port);
+        assert!(next.local_addr().unwrap().ip().is_loopback());
+    }
 }

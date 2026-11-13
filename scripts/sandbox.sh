@@ -3,6 +3,7 @@
 set -euo pipefail
 export PATH="$HOME/.microsandbox/bin:$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 OGH_SANDBOX_NAME="${OGH_SANDBOX_NAME:-ogh-mercato}"
+port_supplied="${OGH_SANDBOX_PORT:-}"
 OGH_SANDBOX_PORT="${OGH_SANDBOX_PORT:-4183}"
 OGH_SETUP_REF="${OGH_SETUP_REF:-main}"
 folder_supplied="${OGH_SANDBOX_FOLDER:-}"
@@ -68,9 +69,19 @@ mkdir -p "$state_dir"
 receipt="$state_dir/$OGH_SANDBOX_NAME.port"
 # inspect is local metadata; never replace or remove an existing VM/volume.
 if msb inspect "$OGH_SANDBOX_NAME" >/dev/null 2>&1; then
+  if [ -z "$port_supplied" ] && [ -f "$receipt" ]; then OGH_SANDBOX_PORT="$(cat "$receipt")"; fi
   [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$OGH_SANDBOX_PORT" ] || { echo "Preserving existing VM or port mapping. Choose a new OGH_SANDBOX_NAME." >&2; exit 1; }
   msb ping "$OGH_SANDBOX_NAME" >/dev/null 2>&1 || msb start "$OGH_SANDBOX_NAME"
 else
+  OGH_SANDBOX_PORT="$(python3 - "$OGH_SANDBOX_PORT" <<'PYPORT'
+import socket, sys
+with socket.socket() as sock:
+    try: sock.bind(('127.0.0.1', int(sys.argv[1])))
+    except OSError: sock.bind(('127.0.0.1', 0))
+    print(sock.getsockname()[1])
+PYPORT
+)"
+  echo "🌐 Using host URL http://127.0.0.1:$OGH_SANDBOX_PORT"
   echo '📦 Creating your persistent development VM…'
   msb create --name "$OGH_SANDBOX_NAME" --cpus 4 --memory 8G --root-disk 32G \
     --mount-named "$OGH_SANDBOX_NAME-home:/root:kind=disk,size=40G" \
@@ -91,7 +102,7 @@ msb exec --timeout 60m "$OGH_SANDBOX_NAME" -- bash -c '
 msb exec --tty --env "OGH_SETUP_REF=$OGH_SETUP_REF" --env OGH_SETUP_PORT=4174 "$OGH_SANDBOX_NAME" -- \
   bash /root/.local/share/ogh-setup/bootstrap.sh --repo "$OGH_SETUP_REPO" --folder "$OGH_GUEST_WORKSPACE" --no-prompt --no-shell --no-open
 # Raw TCP relay preserves localhost Host/Origin checks from the browser.
-msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174'
+msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:$(cat /root/.local/share/ogh-setup/server.url | sed "s/.*://")'
 mkdir -p "$HOME/.local/bin"
 launcher="$HOME/.local/bin/ogh-sandbox"
 # Values have been validated before embedding in shell source.
@@ -102,7 +113,7 @@ set -euo pipefail
 export PATH="\$HOME/.microsandbox/bin:/opt/homebrew/bin:\$PATH"
 msb ping '$OGH_SANDBOX_NAME' >/dev/null 2>&1 || msb start '$OGH_SANDBOX_NAME'
 msb exec --tty --env 'OGH_WORKSPACE=$OGH_GUEST_WORKSPACE' '$OGH_SANDBOX_NAME' -- bash -c 'export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:\$PATH"; python3 /root/.local/share/ogh-setup/offline-github/scripts/setup/finish.py "\$OGH_WORKSPACE" /root/.local/share/ogh-setup 4174'
-msb exec --detach '$OGH_SANDBOX_NAME' -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174'
+msb exec --detach '$OGH_SANDBOX_NAME' -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:\$(cat /root/.local/share/ogh-setup/server.url | sed "s/.*://")'
 exec msb exec --tty '$OGH_SANDBOX_NAME' -- bash /root/.local/bin/ogh-work
 EOF
 chmod +x "$temporary"
@@ -114,5 +125,6 @@ if [ -e "$launcher" ] || [ -L "$launcher" ]; then
 fi
 mv "$temporary" "$launcher"
 echo "✅ Ready: http://127.0.0.1:$OGH_SANDBOX_PORT — next time run ~/.local/bin/ogh-sandbox"
-if command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SANDBOX_PORT"; fi
+if command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SANDBOX_PORT" || true
+elif command -v xdg-open >/dev/null; then xdg-open "http://127.0.0.1:$OGH_SANDBOX_PORT" || true; fi
 exec msb exec --tty "$OGH_SANDBOX_NAME" -- bash /root/.local/bin/ogh-work

@@ -37,6 +37,7 @@ import {
   type Comment,
 } from "./api";
 import "./style.css";
+import { RepoOpen } from "./repo-open";
 import {
   Outgoing,
   QueueDialog,
@@ -387,6 +388,7 @@ function App() {
               </small>
             </div>
           </div>
+          {selected && <RepoOpen key={selected} repo={selected} version={version} />}
           {error && <ErrorBox error={error} />}
           {notice && (
             <div className={noticeWarning ? "notice notice-warning" : "notice"} role={noticeWarning ? "alert" : "status"}>

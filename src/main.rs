@@ -1,5 +1,6 @@
 mod app;
 mod format;
+mod launcher;
 mod offline_api;
 mod outbox;
 mod process;
@@ -96,6 +97,12 @@ enum Commands {
     Serve {
         #[arg(long, default_value_t = 4173)]
         port: u16,
+        /// Do not open the default browser (useful for headless servers)
+        #[arg(long)]
+        no_browser: bool,
+        /// Write the actual bound URL for launchers
+        #[arg(long)]
+        url_file: Option<PathBuf>,
         #[arg(long, env = "OGH_WEB_DIR")]
         web_dir: Option<PathBuf>,
     },
@@ -1071,9 +1078,14 @@ async fn main() -> Result<()> {
             }
             AppCommand::Paths => format::emit(&app::paths(&store), &Format::default())?,
         },
-        Commands::Serve { port, web_dir } => {
+        Commands::Serve {
+            port,
+            web_dir,
+            no_browser,
+            url_file,
+        } => {
             let web_dir = app::web_dir(&store, web_dir);
-            server::serve(store, port, web_dir).await?;
+            server::serve(store, port, web_dir, no_browser, url_file).await?;
         }
     }
     Ok(())
