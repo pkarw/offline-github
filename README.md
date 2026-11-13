@@ -32,6 +32,7 @@ cargo build --release --locked
 
 # Optional: install the CLI in ~/.cargo/bin
 cargo install --path . --locked
+export PATH="$HOME/.cargo/bin:$PATH"
 
 ogh repo add open-mercato/open-mercato
 ogh repo add open-mercato/cezar
@@ -46,6 +47,7 @@ The first sync downloads **all issues/PR metadata and conversations**, plus full
 <details>
 <summary>📸 Pull requests, source browser and mobile</summary>
 
+![Open Mercato workspace](docs/screenshots/open-mercato.png)
 ![PR diff](docs/screenshots/pull-request.png)
 ![Local source browser](docs/screenshots/source.png)
 <img src="docs/screenshots/mobile.png" width="320" alt="Mobile workspace" />
