@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
-  Github,
   Plus,
   RefreshCw,
   Search,
@@ -220,7 +219,7 @@ function App() {
       <aside className={mobile ? "sidebar mobile-open" : "sidebar"}>
         <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
           <div className="brand-icon">
-            <Github size={24} />
+            <img src="/brand/mark.svg" alt="" />
           </div>
           <span>
             offline<span className="brand-light">github</span>
@@ -300,7 +299,7 @@ function App() {
             >
               <Menu size={20} />
             </Button>
-            <Github size={18} />
+            <img src="/brand/mark.svg" alt="" />
             <span>{selected.split("/")[0] || "Workspace"}</span>
             <span className="slash">/</span>
             <strong>{selected.split("/")[1] || "Overview"}</strong>
@@ -525,7 +524,7 @@ function App() {
           )}
           <footer>
             <span>
-              <Github size={14} /> Offline GitHub
+              <img src="/brand/mark.svg" width={16} height={16} alt="" /> Offline GitHub
             </span>
             <span>A little less connected. Just as productive.</span>
           </footer>

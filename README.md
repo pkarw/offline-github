@@ -1,4 +1,8 @@
+![Offline GitHub — your work, anywhere](docs/brand/logo.svg)
+
 # 🛫 Offline GitHub
+
+**Open source · MIT licensed · Local first**
 
 **Your repositories. Your issues. Your pull requests. Even at 35,000 feet.**
 
@@ -110,4 +114,6 @@ cd web && npm run dev
 
 The backend is Axum, Clap and an atomic on-disk JSON snapshot per project; Git is invoked directly without a shell. API calls go through authenticated `gh api --method GET`. API contract: [docs/API.md](docs/API.md).
 
-**License:** [MIT](LICENSE) · Made for long flights and focused work ☁️
+**License:** [MIT](LICENSE), including this project’s original logo and brand assets. GitHub is a trademark of GitHub, Inc.; this independent project uses no GitHub logo. Third-party dependencies retain their own licenses.
+
+Made for long flights and focused work ☁️

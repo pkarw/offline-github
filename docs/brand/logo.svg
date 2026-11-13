@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
+  <title id="title">Offline GitHub</title><desc id="desc">Original archive mark with a lime local-status square on a black background. Your work, anywhere. Open source under the MIT license.</desc>
+  <rect width="1200" height="340" rx="20" fill="#0d0d0d"/>
+  <rect x="1" y="1" width="1198" height="338" rx="19" fill="none" stroke="#262626"/>
+  <g transform="translate(72 100) scale(2)">
+    <path d="M22 14h20l8 8v20l-8 8H22l-8-8V22l8-8Z" stroke="#fafafa" stroke-width="4" fill="none"/>
+    <path d="M24 25h16M24 33h12M24 41h7" stroke="#fafafa" stroke-width="3" fill="none"/>
+    <rect x="42" y="42" width="12" height="12" rx="2" fill="#a8f372" stroke="#0d0d0d" stroke-width="3"/>
+  </g>
+  <text x="240" y="115" fill="#a8f372" font-family="ui-monospace,monospace" font-size="14" letter-spacing="3">LOCAL FIRST / READY FOR TAKEOFF</text>
+  <text x="236" y="192" fill="#fafafa" font-family="Arial,Helvetica,sans-serif" font-size="66" font-weight="700" letter-spacing="-3">offline<tspan fill="#a3a3a3" font-weight="400">github</tspan></text>
+  <text x="240" y="237" fill="#a3a3a3" font-family="Arial,Helvetica,sans-serif" font-size="22">Your repositories. Your issues. Your work, anywhere.</text>
+  <rect x="1013" y="42" width="143" height="30" rx="7" fill="#171717" stroke="#303030"/>
+  <text x="1085" y="62" fill="#d4d4d4" text-anchor="middle" font-family="ui-monospace,monospace" font-size="12">OPEN SOURCE · MIT</text>
+</svg>
