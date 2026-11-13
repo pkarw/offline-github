@@ -5,6 +5,7 @@
 - [Setup and troubleshooting](SETUP.md)
 - [App and CLI guide](GUIDE.md)
 - [Microsandbox alternative](SANDBOX.md)
+- [gh vs ogh feature parity](FEATURE-PARITY.md)
 - [Skills operation audit](skills-compatibility.md)
 - [Offline tracker](trackers/offline-github.md)
 - [Local API](API.md)

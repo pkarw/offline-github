@@ -29,7 +29,7 @@ still identifies your server). Restart with `ogh serve`.
 ## Prerequisites
 
 - **macOS Apple Silicon:** Homebrew; missing Git, GitHub CLI, jq, Python and Node
-  22 are installed using Brew. The app uses the checksummed v0.2.0 binary bundle,
+  22 are installed using Brew. The app uses the checksummed v0.2.1 binary bundle,
   so Rust is unnecessary.
 - **Other macOS/Linux:** Git, curl, GitHub CLI, jq, Python 3, Node.js 22+ and its
   npm, plus a native C build toolchain, pkg-config and OpenSSL development files.
@@ -90,13 +90,14 @@ OGH_WORKSPACE="$HOME/Projects/mercato-flight" OGH_SETUP_PORT=4180 \
 ```
 
 `OGH_SETUP_ROOT` selects the installer/tool source directory. `OGH_DATA_DIR`
-selects the application cache/outbox as usual; retain it between sessions.
+selects the application cache/outbox as usual; the helper retains its resolved path
+between sessions. Existing helper files/symlinks are moved to unique backups.
 `--no-shell` leaves the original shell in place; `--no-open` skips browser
 opening. `--skip-sync` is only for reusing an already populated cache. The
 installer source checkout refuses to update with local changes. An existing
 skills clone is reused; refresh it deliberately and rerun to update copies.
 
-If port 4173 belongs to another healthy ogh server, setup reuses it. An unrelated
-listener causes a clear error; choose another port. Check `server.log` on a
+If port 4173 belongs to a healthy ogh server using the same cache, setup reuses it.
+A different cache, older unverifiable server or unrelated listener causes a clear error; choose another port. Check `server.log` on a
 startup failure. An interrupted initial download can be rerun; an unrecognized
 partial worktree is preserved and requires a new destination or manual inspection.

@@ -211,8 +211,8 @@ pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> 
     let app = Router::new()
         .route(
             "/api/health",
-            get(|| async {
-                Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true}))
+            get(|State(s): State<Store>| async move {
+                Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true,"data_dir":s.root}))
             }),
         )
         .route("/api/outbox", get(outgoing).post(queue))

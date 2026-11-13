@@ -4,6 +4,7 @@ import argparse
 import json
 import shutil
 import time
+import uuid
 from pathlib import Path
 
 
@@ -11,7 +12,7 @@ def configure(workspace, skills, source):
     workspace, skills, source = map(Path, (workspace, skills, source))
     ai = workspace / '.ai'
     ai.mkdir(exist_ok=True)
-    stamp = time.strftime('%Y%m%d-%H%M%S')
+    stamp = time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
 
     def write(path, text):
         path.parent.mkdir(parents=True, exist_ok=True)

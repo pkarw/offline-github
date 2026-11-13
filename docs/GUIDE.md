@@ -193,4 +193,3 @@ Bare `--json` retains legacy raw ogh output; `--json number,title,…` returns g
 - GraphQL/arbitrary REST passthrough and generic REST mutations are unsupported. Use named local queue commands; only explicit preparation/sync goes online.
 - Server binds to localhost with Host/Origin checks and CSP. Keep it local: caches/reports can contain private source, discussions and unpublished work.
 - There is no service worker: the local Rust server must be running. GitHub is not a transactional store across multiple operations; the ledger shows each confirmed, pending or unresolved result separately.
-

@@ -39,7 +39,8 @@ this launcher exposes only the Offline GitHub browser app. Agent API access
 still needs internet even when repository data is cached.
 
 Use `OGH_SANDBOX_NAME` and `OGH_SANDBOX_PORT` to select a different VM/host port
-on first setup. Reuse the generated helper for that instance. Stop the VM when
+on first setup. Existing unrecognized VMs or changed port mappings are preserved;
+choose a new name instead. Reuse the generated helper for that instance. Stop the VM when
 finished; leaving its shell does not discard or stop it.
 
 Official references: [Microsandbox](https://microsandbox.dev/),

@@ -15,14 +15,19 @@ if ! command -v msb >/dev/null; then
   rm "$installer"
 fi
 msb doctor
+state_dir="$HOME/.local/share/ogh-sandbox"
+mkdir -p "$state_dir"
+receipt="$state_dir/$OGH_SANDBOX_NAME.port"
 # inspect is local metadata; never replace or remove an existing VM/volume.
 if msb inspect "$OGH_SANDBOX_NAME" >/dev/null 2>&1; then
+  [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$OGH_SANDBOX_PORT" ] || { echo "Preserving existing VM or port mapping. Choose a new OGH_SANDBOX_NAME." >&2; exit 1; }
   msb ping "$OGH_SANDBOX_NAME" >/dev/null 2>&1 || msb start "$OGH_SANDBOX_NAME"
 else
   msb create --name "$OGH_SANDBOX_NAME" --cpus 4 --memory 8G --root-disk 32G \
     --mount-named "$OGH_SANDBOX_NAME-home:/root:kind=disk,size=40G" \
     --port "127.0.0.1:$OGH_SANDBOX_PORT:4173" \
     --workdir /root --user root docker.io/library/node:22-bookworm
+  printf '%s\n' "$OGH_SANDBOX_PORT" > "$receipt"
 fi
 # Bootstrap is separate from shell attachment so interruption never destroys local work.
 msb exec --timeout 60m "$OGH_SANDBOX_NAME" -- bash -c '
@@ -37,11 +42,12 @@ msb exec --timeout 60m "$OGH_SANDBOX_NAME" -- bash -c '
 msb exec --tty --env "OGH_SETUP_REF=$OGH_SETUP_REF" --env OGH_SETUP_PORT=4174 "$OGH_SANDBOX_NAME" -- \
   bash /root/.local/share/ogh-setup/bootstrap.sh --no-shell --no-open
 # Raw TCP relay preserves localhost Host/Origin checks from the browser.
-msb exec --detach "$OGH_SANDBOX_NAME" -- socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174
+msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174'
 mkdir -p "$HOME/.local/bin"
 launcher="$HOME/.local/bin/ogh-sandbox"
 # Values have been validated before embedding in shell source.
-cat > "$launcher" <<EOF
+temporary="$(mktemp "$HOME/.local/bin/ogh-sandbox.XXXXXX")"
+cat > "$temporary" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 export PATH="\$HOME/.microsandbox/bin:/opt/homebrew/bin:\$PATH"
@@ -50,7 +56,14 @@ msb exec --tty '$OGH_SANDBOX_NAME' -- bash -c 'export PATH="\$HOME/.local/bin:\$
 msb exec --detach '$OGH_SANDBOX_NAME' -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174'
 exec msb exec --tty '$OGH_SANDBOX_NAME' -- bash /root/.local/bin/ogh-work
 EOF
-chmod +x "$launcher"
+chmod +x "$temporary"
+if [ -e "$launcher" ] || [ -L "$launcher" ]; then
+  [ ! -d "$launcher" ] || [ -L "$launcher" ] || { echo "Preserving helper directory: $launcher" >&2; exit 1; }
+  backup="$(mktemp -d "$HOME/.local/bin/ogh-sandbox.backup.XXXXXX")"
+  mv "$launcher" "$backup/ogh-sandbox"
+  echo "Previous helper retained at $backup/ogh-sandbox"
+fi
+mv "$temporary" "$launcher"
 echo "Ready: http://127.0.0.1:$OGH_SANDBOX_PORT — next time run ~/.local/bin/ogh-sandbox"
 if command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SANDBOX_PORT"; fi
 exec msb exec --tty "$OGH_SANDBOX_NAME" -- bash /root/.local/bin/ogh-work

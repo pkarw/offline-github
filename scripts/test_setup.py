@@ -6,12 +6,17 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('configure', ROOT / 'scripts/setup/configure.py')
 configure = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(configure)
+
+spec = importlib.util.spec_from_file_location('finish', ROOT / 'scripts/setup/finish.py')
+finish = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(finish)
 
 
 class SetupTests(unittest.TestCase):
@@ -65,6 +70,55 @@ class SetupTests(unittest.TestCase):
         self.run_config()
         self.assertTrue(any((p / 'SKILL.md').read_text() == 'user change' for p in (ai / 'ogh-skills').glob('*.ogh-backup-*')))
 
+    def test_helper_preserves_files_and_symlink_targets(self):
+        helper = self.root / 'helper'
+        helper.write_text('precious original')
+        finish.install_helper(helper, 'new helper')
+        self.assertEqual(next(self.root.glob('helper.ogh-backup-*')).read_text(), 'precious original')
+        target = self.root / 'target'
+        target.write_text('precious target')
+        helper.unlink()
+        helper.symlink_to(target)
+        finish.install_helper(helper, 'replacement')
+        self.assertEqual(target.read_text(), 'precious target')
+        self.assertFalse(helper.is_symlink())
+        self.assertTrue(any(p.is_symlink() for p in self.root.glob('helper.ogh-backup-*')))
+
+    def test_sandbox_helper_preserves_symlink_target(self):
+        script = (ROOT / 'scripts/sandbox.sh').read_text()
+        block = script[script.index('mkdir -p "$HOME/.local/bin"'):script.index('echo "Ready:')]
+        folder = self.root / '.local/bin'
+        folder.mkdir(parents=True)
+        helper = folder / 'ogh-sandbox'
+        target = self.root / 'precious'
+        target.write_text('keep me')
+        helper.symlink_to(target)
+        subprocess.run(['bash', '-eu', '-c', block], check=True, timeout=10,
+                       env=dict(os.environ, HOME=str(self.root), OGH_SANDBOX_NAME='test', OGH_SANDBOX_PORT='4183'))
+        self.assertEqual(target.read_text(), 'keep me')
+        self.assertFalse(helper.is_symlink())
+        self.assertTrue(next(folder.glob('ogh-sandbox.backup.*/ogh-sandbox')).is_symlink())
+
+    def test_custom_cache_reentry_and_wrong_cache_rejected(self):
+        import io
+        cache = str(self.root / 'custom cache')
+        def response(data_dir):
+            return io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'data_dir': data_dir}).encode())
+        with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}):
+            with patch('urllib.request.urlopen', return_value=response(cache)):
+                finish.finish(self.work, self.root / 'state', 4181)
+            helper = (self.root / '.local/bin/ogh-work').read_text()
+            self.assertIn("export OGH_DATA_DIR='" + cache + "'", helper)
+            with patch('urllib.request.urlopen', return_value=response('/other/cache')):
+                with self.assertRaisesRegex(RuntimeError, 'different or unverifiable cache'):
+                    finish.finish(self.work, self.root / 'state', 4181)
+
+    def test_rapid_reconfiguration_backups_never_collide(self):
+        with patch.object(configure.time, 'strftime', return_value='fixed-clock'):
+            for _ in range(4):
+                self.run_config()
+        self.assertEqual(len(list((self.work / '.ai/ogh-skills').glob('*.ogh-backup-*'))), 3)
+
     def test_shell_syntax(self):
         for script in ('setup.sh', 'sandbox.sh'):
             subprocess.run(['bash', '-n', str(ROOT / 'scripts' / script)], check=True, timeout=10)
@@ -81,7 +135,7 @@ class SetupTests(unittest.TestCase):
             sock.bind(('127.0.0.1', 0))
             sock.listen()
             port = sock.getsockname()[1]
-            env = dict(os.environ, HOME=str(self.root))
+            env = dict(os.environ, HOME=str(self.root), OGH_DATA_DIR=str(self.root / 'cache'))
             result = subprocess.run(['python3', str(ROOT / 'scripts/setup/finish.py'),
                                      str(self.work), str(self.root / 'state'), str(port)],
                                     env=env, capture_output=True, text=True, timeout=8)
