@@ -1372,3 +1372,7 @@ textarea {
 .label-filter { max-width: 220px; min-width: 110px; background: var(--panel, #191919); color: inherit; border: 1px solid #383838; border-radius: 6px; padding: 8px; }
 
 .markdown .cached-image { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 12px 0; }
+
+.repo-actions summary { padding: 9px; }
+.repo-actions .remove-project { color: #fca5a5; }
+.open-dropdown summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }

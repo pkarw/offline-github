@@ -447,7 +447,7 @@ function App() {
               <small>{pulling ? "Checking GitHub for incoming changes…" : `Last pulled ${date(repo?.last_sync)}`}</small>
             </div>
           </div>
-          {selected && <><RepoOpen key={selected} repo={selected} version={version} /><RepoRemove key={"remove-"+selected} repo={selected} onRemoved={async () => { setNumber(null); setItems([]); await loadRepos(); refreshOutbox(); }} /></>}
+          {selected && <RepoOpen key={selected} repo={selected} version={version}><RepoRemove key={"remove-"+selected} repo={selected} onRemoved={async () => { setNumber(null); setItems([]); await loadRepos(); refreshOutbox(); }} /></RepoOpen>}
           {error && <ErrorBox error={error} />}
           {notice && (
             <div className={noticeWarning ? "notice notice-warning" : "notice"} role={noticeWarning ? "alert" : "status"}>

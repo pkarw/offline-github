@@ -3,7 +3,7 @@ import { ChevronDown, Folder, Terminal, RefreshCw } from "lucide-react";
 import { api, repoUrl } from "./api";
 
 type Context = { path: string; workspaces: string[]; checkout_exists: boolean; tools: { id: string; label: string; available: boolean; reason: string }[] };
-export function RepoOpen({ repo, version }: { repo: string; version: number }) {
+export function RepoOpen({ repo, version, children }: { repo: string; version: number; children?: React.ReactNode }) {
   const [context, setContext] = useState<Context>();
   const [path, setPath] = useState("");
   const [message, setMessage] = useState("");
@@ -39,6 +39,7 @@ export function RepoOpen({ repo, version }: { repo: string; version: number }) {
         <button disabled={busy} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={13} /> Refresh detection</button>
       </div>
     </details>
+    {children}
     {message && <small className="launch-message" role="status">{message}</small>}
   </div>;
 }
