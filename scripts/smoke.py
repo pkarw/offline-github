@@ -31,6 +31,7 @@ class SyncTests(unittest.TestCase):
             gh.write_text('''#!/usr/bin/env python3
 import json, os, sys
 endpoint=sys.argv[-1]
+assert sys.argv[1]=='api' and sys.argv[sys.argv.index('--method')+1]=='GET', 'Upstream writes forbidden'
 with open(os.environ['REQUEST_LOG'],'a') as f:f.write(endpoint+'\\n')
 if os.environ.get('FAIL_SYNC'):sys.exit(1)
 data=json.load(open(os.environ['FIXTURE']))
