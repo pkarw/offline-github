@@ -660,7 +660,7 @@ function ItemDetail({
         <Tabs.Content value="reviews">
           {!d.reviews.length && !d.review_comments.length && (
             <Empty title="No reviews cached">
-              Reviews will appear here after a sync.
+              Run ogh sync -R {repo} --reviews to download review summaries.
             </Empty>
           )}
           {d.reviews.map((c) => (
@@ -682,8 +682,8 @@ function ItemDetail({
                 <FileText size={15} />
                 <code>{f.filename}</code>
                 <span>{f.status}</span>
-                <b className="green">+{f.additions}</b>
-                <b className="red">−{f.deletions}</b>
+                <b className="green">{f.additions == null ? "binary" : `+${f.additions}`}</b>
+                <b className="red">{f.deletions == null ? "" : `−${f.deletions}`}</b>
               </div>
               <Diff
                 text={
@@ -695,6 +695,8 @@ function ItemDetail({
           ))}
         </Tabs.Content>
         <Tabs.Content value="diff">
+          {d.diff_error && <ErrorBox error={d.diff_error} />}
+          {d.diff_truncated && <p className="muted">Preview limited to 4 MB. Use ogh pr diff for the full patch.</p>}
           <Diff
             text={
               d.diff ||

@@ -46,6 +46,9 @@ export type Detail = {
     patch?: string;
   }[];
   diff: string;
+  diff_error?: string;
+  diff_truncated?: boolean;
+  reviews_cached?: boolean;
 };
 export type Entry = { name: string; path: string; kind: "tree" | "blob" };
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {

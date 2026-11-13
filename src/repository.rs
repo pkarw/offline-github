@@ -66,15 +66,39 @@ pub fn detail(store: &Store, repo: &str, n: u64) -> Result<Value> {
                     item["base"]["sha"].as_str().unwrap(),
                     item["head"]["sha"].as_str().unwrap()
                 );
-                let names = git(
+                let stats = git(
                     &store.mirror(repo)?,
-                    &["diff", "--name-only", "-z", &range, "--"],
+                    &[
+                        "diff",
+                        "--no-ext-diff",
+                        "--no-textconv",
+                        "--numstat",
+                        "--no-renames",
+                        "-z",
+                        &range,
+                        "--",
+                    ],
                 )?;
-                d["files"] = json!(names
-                    .split('\0')
-                    .filter(|s| !s.is_empty())
-                    .map(|s| json!({"filename":s,"status":"modified"}))
-                    .collect::<Vec<_>>());
+                let statuses = git(
+                    &store.mirror(repo)?,
+                    &["diff", "--name-status", "--no-renames", "-z", &range, "--"],
+                )?;
+                let status_parts: Vec<_> = statuses.split('\0').collect();
+                let statuses: std::collections::HashMap<_, _> = status_parts
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|p| (p[1], p[0]))
+                    .collect();
+                let patches: Vec<_> = patch[..end].split("diff --git ").skip(1).collect();
+                d["files"] = json!(stats.split('\0').filter_map(|row| {
+                    let parts: Vec<_> = row.splitn(3, '\t').collect();
+                    if parts.len()!=3 {return None;}
+                    let name=parts[2];
+                    let section=patches.iter().find(|p|p.lines().any(|line|line==format!("+++ b/{name}") || line==format!("--- a/{name}"))).map(|p|format!("diff --git {p}"));
+                    let status=match statuses.get(name).copied(){Some("A")=>"added",Some("D")=>"removed",_=>"modified"};
+                    Some(json!({"filename":name,"status":status,"additions":parts[0].parse::<u64>().ok(),"deletions":parts[1].parse::<u64>().ok(),"patch":section}))
+                }).collect::<Vec<_>>());
             }
             Err(e) => {
                 d["diff_error"] = json!(e.to_string());

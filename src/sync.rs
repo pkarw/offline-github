@@ -78,6 +78,9 @@ pub fn sync(store: &Store, repo: &str, reviews: bool, full: bool) -> Result<Valu
     for item in issues {
         let n = item["number"].as_u64().context("Invalid issue number")?;
         let d=s.details.entry(n).or_insert_with(||json!({"item":null,"comments":[],"reviews":[],"review_comments":[],"files":[],"diff":""}));
+        if d["item"]["updated_at"] != item["updated_at"] {
+            d["reviews_cached"] = json!(false);
+        }
         d["item"] = item.clone();
         s.items.insert(n, item);
     }
@@ -156,7 +159,7 @@ pub fn sync(store: &Store, repo: &str, reviews: bool, full: bool) -> Result<Valu
         &[
             "fetch",
             "origin",
-            "+refs/heads/*:refs/heads/*",
+            "+refs/heads/*:refs/remotes/origin/*",
             "+refs/tags/*:refs/tags/*",
             "+refs/pull/*/head:refs/pull/*/head",
         ],
@@ -166,7 +169,7 @@ pub fn sync(store: &Store, repo: &str, reviews: bool, full: bool) -> Result<Valu
         &[
             "symbolic-ref",
             "HEAD",
-            &format!("refs/heads/{}", s.default_branch),
+            &format!("refs/remotes/origin/{}", s.default_branch),
         ],
     )?;
     if reviews {
