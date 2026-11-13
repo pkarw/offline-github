@@ -5,21 +5,37 @@ export PATH="$HOME/.microsandbox/bin:$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 OGH_SANDBOX_NAME="${OGH_SANDBOX_NAME:-ogh-mercato}"
 OGH_SANDBOX_PORT="${OGH_SANDBOX_PORT:-4183}"
 OGH_SETUP_REF="${OGH_SETUP_REF:-main}"
+folder_supplied="${OGH_SANDBOX_FOLDER:-}"
 OGH_SANDBOX_FOLDER="${OGH_SANDBOX_FOLDER:-open-mercato-offline}"
+OGH_SETUP_REPO="${OGH_SETUP_REPO:-open-mercato/open-mercato}"
+OGH_REPO_PROMPT=auto
 OGH_SETUP_PROMPT=auto
 OGH_SETUP_PLAN=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --folder|-d) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --folder value' >&2; exit 1; }; OGH_SANDBOX_FOLDER="$2"; OGH_SETUP_PROMPT=off; shift ;;
-    --no-prompt) OGH_SETUP_PROMPT=off ;;
-    --interactive) OGH_SETUP_PROMPT=on ;;
+    --folder|-d) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --folder value' >&2; exit 1; }; OGH_SANDBOX_FOLDER="$2"; folder_supplied="$2"; OGH_SETUP_PROMPT=off; shift ;;
+    --repo|-R) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --repo value' >&2; exit 1; }; OGH_SETUP_REPO="$2"; OGH_REPO_PROMPT=off; shift ;;
+    --no-prompt) OGH_SETUP_PROMPT=off; OGH_REPO_PROMPT=off ;;
+    --interactive) OGH_SETUP_PROMPT=on; OGH_REPO_PROMPT=on ;;
     --plan) OGH_SETUP_PLAN=1 ;;
-    --help) printf '%s\n' 'Usage: bash sandbox.sh [--folder NAME] [--interactive|--no-prompt] [--plan]' 'Folder name is inside the guest at /root/Projects/NAME (letters, digits, spaces, dots, dashes, underscores).' 'Interactive terminals prompt for the folder. --plan only shows destinations; installs nothing.'; exit 0 ;;
+    --help) printf '%s\n' 'Usage: bash sandbox.sh [--repo OWNER/REPO] [--folder NAME] [--interactive|--no-prompt] [--plan]' 'Folder name is inside the guest at /root/Projects/NAME (letters, digits, spaces, dots, dashes, underscores).' 'Repository defaults to open-mercato/open-mercato; GitHub HTTPS URLs are also accepted.' 'Interactive terminals prompt for the repository and folder. --plan only shows destinations; installs nothing.'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
   shift
 done
 printf '\n🧊 Offline GitHub · Microsandbox setup\n'
+printf '🐙 GitHub repository: %s\n' "$OGH_SETUP_REPO"
+if [ "$OGH_REPO_PROMPT" = on ] || { [ "$OGH_REPO_PROMPT" = auto ] && [ -t 0 ] && [ "$OGH_SETUP_PLAN" = 0 ]; }; then
+  printf '✏️  GitHub repository (Enter keeps the value above): '
+  IFS= read -r chosen_repo || { echo 'Setup cancelled before installation.' >&2; exit 1; }
+  if [ -n "$chosen_repo" ]; then OGH_SETUP_REPO="$chosen_repo"; fi
+fi
+OGH_SETUP_REPO="${OGH_SETUP_REPO#https://github.com/}"
+OGH_SETUP_REPO="${OGH_SETUP_REPO%/}"
+OGH_SETUP_REPO="${OGH_SETUP_REPO%.git}"
+[[ "$OGH_SETUP_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*/[a-zA-Z0-9_.-]+$ ]] && [[ "${OGH_SETUP_REPO#*/}" != . ]] && [[ "${OGH_SETUP_REPO#*/}" != .. ]] || { echo 'Invalid repository; use OWNER/REPO or https://github.com/OWNER/REPO.' >&2; exit 1; }
+printf '📦 Selected repository: %s\n' "$OGH_SETUP_REPO"
+if [ -z "$folder_supplied" ]; then OGH_SANDBOX_FOLDER="${OGH_SETUP_REPO#*/}-offline"; fi
 printf '📂 Project folder inside VM: /root/Projects/%s\n' "$OGH_SANDBOX_FOLDER"
 if [ "$OGH_SETUP_PROMPT" = on ] || { [ "$OGH_SETUP_PROMPT" = auto ] && [ -t 0 ] && [ "$OGH_SETUP_PLAN" = 0 ]; }; then
   printf '✏️  Guest folder name (Enter keeps the default): '
@@ -73,7 +89,7 @@ msb exec --timeout 60m "$OGH_SANDBOX_NAME" -- bash -c '
 '
 # Install/login remains interactive; GitHub credentials are entered inside the guest only.
 msb exec --tty --env "OGH_SETUP_REF=$OGH_SETUP_REF" --env OGH_SETUP_PORT=4174 "$OGH_SANDBOX_NAME" -- \
-  bash /root/.local/share/ogh-setup/bootstrap.sh --folder "$OGH_GUEST_WORKSPACE" --no-prompt --no-shell --no-open
+  bash /root/.local/share/ogh-setup/bootstrap.sh --repo "$OGH_SETUP_REPO" --folder "$OGH_GUEST_WORKSPACE" --no-prompt --no-shell --no-open
 # Raw TCP relay preserves localhost Host/Origin checks from the browser.
 msb exec --detach "$OGH_SANDBOX_NAME" -- bash -c 'pgrep -x socat >/dev/null || exec socat TCP-LISTEN:4173,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:4174'
 mkdir -p "$HOME/.local/bin"

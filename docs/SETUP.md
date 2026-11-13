@@ -9,11 +9,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/sc
 ```
 
 Use Bash or Zsh to paste this command. The downloaded script runs in Bash. It
-first shows the project, CLI, cache and installer paths, then prompts for the
-project folder before making changes. Press **Enter** to keep the default, or
+first asks for a GitHub repository (**open-mercato/open-mercato** by default),
+then shows destinations and prompts for the project folder before making changes. Press **Enter** to keep the default, or
 type another name/path. After setup, it opens a **new interactive shell** in
 your chosen folder (default `~/Projects/open-mercato-offline`), with
-`OGH_REPO=open-mercato/open-mercato` and the CLI on PATH. `exit` returns to your
+`OGH_REPO` set to your selected repository and the CLI on PATH. `exit` returns to your
 original shell; `~/.local/bin/ogh-work` returns to the project later.
 
 The setup installs the CLI and UI, caches the complete public repository and
@@ -94,12 +94,26 @@ bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/sc
 bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh) --folder "My Mercato" --plan
 ```
 
+`--repo OWNER/REPO` (or `-R`) skips the repository prompt. A GitHub HTTPS URL
+is accepted too. `OGH_SETUP_REPO` changes the default. For example:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh) --repo acme/widget --folder widget-work
+```
+
+The default folder follows the repository name: `~/Projects/REPO-offline`.
+Open Mercato skills are still installed with the ogh tracker for your selected
+repository; framework-specific skills may only apply to Open Mercato projects.
+An existing managed workspace for a different repository is preserved: choose
+another folder to set up the new repository.
+
 A bare `--folder NAME` goes under `~/Projects`; an absolute path is used as
 given, and a path containing `/` is relative to your current directory. Quote
 names with spaces. `-d` is shorthand for `--folder`. `OGH_WORKSPACE` sets the
 default; `OGH_SETUP_PORT=4180` selects another browser port.
 
-Interactive terminals prompt automatically unless `--folder` was supplied.
+Interactive terminals prompt for each choice unless its `--repo` or `--folder`
+option was supplied.
 Use `--no-prompt` to accept the default in automation, or `--interactive` to
 force a folder prompt (including with `--plan`). End-of-input cancels a prompt
 before installation. The generated `ogh-work` helper remembers your folder.

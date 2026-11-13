@@ -3,29 +3,45 @@
 set -euo pipefail
 OGH_SETUP_REF="${OGH_SETUP_REF:-main}"
 OGH_SETUP_ROOT="${OGH_SETUP_ROOT:-$HOME/.local/share/ogh-setup}"
+workspace_supplied="${OGH_WORKSPACE:-}"
 OGH_WORKSPACE="${OGH_WORKSPACE:-$HOME/Projects/open-mercato-offline}"
 OGH_SETUP_PORT="${OGH_SETUP_PORT:-4173}"
 OGH_SETUP_SHELL=1
 OGH_SETUP_SYNC=1
 OGH_SETUP_OPEN=1
+OGH_SETUP_REPO="${OGH_SETUP_REPO:-open-mercato/open-mercato}"
+OGH_REPO_PROMPT=auto
 OGH_SETUP_PROMPT=auto
 OGH_SETUP_PLAN=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --folder|-d) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --folder value' >&2; exit 1; }; OGH_WORKSPACE="$2"; OGH_SETUP_PROMPT=off; shift ;;
-    --no-prompt) OGH_SETUP_PROMPT=off ;;
-    --interactive) OGH_SETUP_PROMPT=on ;;
+    --folder|-d) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --folder value' >&2; exit 1; }; OGH_WORKSPACE="$2"; workspace_supplied="$2"; OGH_SETUP_PROMPT=off; shift ;;
+    --repo|-R) [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != --* ]] || { echo 'Missing --repo value' >&2; exit 1; }; OGH_SETUP_REPO="$2"; OGH_REPO_PROMPT=off; shift ;;
+    --no-prompt) OGH_SETUP_PROMPT=off; OGH_REPO_PROMPT=off ;;
+    --interactive) OGH_SETUP_PROMPT=on; OGH_REPO_PROMPT=on ;;
     --plan) OGH_SETUP_PLAN=1 ;;
     --no-shell) OGH_SETUP_SHELL=0 ;;
     --skip-sync) OGH_SETUP_SYNC=0 ;;
     --no-open) OGH_SETUP_OPEN=0 ;;
-    --help) printf '%s\n' 'Usage: bash setup.sh [--folder NAME|PATH] [--interactive|--no-prompt] [--plan]' '                     [--no-shell] [--no-open] [--skip-sync]' 'Bare folder names go under ~/Projects; paths containing / are relative to your current folder.' 'Interactive terminals prompt for the folder. --plan only shows destinations; installs nothing.'; exit 0 ;;
+    --help) printf '%s\n' 'Usage: bash setup.sh [--repo OWNER/REPO] [--folder NAME|PATH] [--interactive|--no-prompt] [--plan]' '                     [--no-shell] [--no-open] [--skip-sync]' 'Bare folder names go under ~/Projects; paths containing / are relative to your current folder.' 'Repository defaults to open-mercato/open-mercato; GitHub HTTPS URLs are also accepted.' 'Interactive terminals prompt for the repository and folder. --plan only shows destinations; installs nothing.'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
   shift
 done
 # Show the destination and let the user change it before any installation work.
 printf '\n🛫 Offline GitHub · local setup\n'
+printf '🐙 GitHub repository: %s\n' "$OGH_SETUP_REPO"
+if [ "$OGH_REPO_PROMPT" = on ] || { [ "$OGH_REPO_PROMPT" = auto ] && [ -t 0 ] && [ "$OGH_SETUP_PLAN" = 0 ]; }; then
+  printf '✏️  GitHub repository (Enter keeps the value above): '
+  IFS= read -r chosen_repo || { echo 'Setup cancelled before installation.' >&2; exit 1; }
+  if [ -n "$chosen_repo" ]; then OGH_SETUP_REPO="$chosen_repo"; fi
+fi
+OGH_SETUP_REPO="${OGH_SETUP_REPO#https://github.com/}"
+OGH_SETUP_REPO="${OGH_SETUP_REPO%/}"
+OGH_SETUP_REPO="${OGH_SETUP_REPO%.git}"
+[[ "$OGH_SETUP_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*/[a-zA-Z0-9_.-]+$ ]] && [[ "${OGH_SETUP_REPO#*/}" != . ]] && [[ "${OGH_SETUP_REPO#*/}" != .. ]] || { echo 'Invalid repository; use OWNER/REPO or https://github.com/OWNER/REPO.' >&2; exit 1; }
+printf '📦 Selected repository: %s\n' "$OGH_SETUP_REPO"
+if [ -z "$workspace_supplied" ]; then OGH_WORKSPACE="$HOME/Projects/${OGH_SETUP_REPO#*/}-offline"; fi
 printf '📂 Project folder: %s\n' "$OGH_WORKSPACE"
 if [ "$OGH_SETUP_PROMPT" = on ] || { [ "$OGH_SETUP_PROMPT" = auto ] && [ -t 0 ] && [ "$OGH_SETUP_PLAN" = 0 ]; }; then
   printf '✏️  Project folder (Enter keeps the default): '
@@ -113,17 +129,23 @@ fi
 if ! gh auth status >/dev/null 2>&1; then
   gh auth login --hostname github.com --git-protocol https --web < /dev/tty
 fi
-repo_record="$(ogh repo add open-mercato/open-mercato)"
+repo_record="$(ogh repo add "$OGH_SETUP_REPO")"
 mirror="$(printf '%s' "$repo_record" | jq -r .path)"
 if [ "$OGH_SETUP_SYNC" = 1 ]; then
   echo '📥 Downloading repository history and all issues/PRs; the first sync can take several minutes.'
-  ogh sync -R open-mercato/open-mercato
+  ogh sync -R "$OGH_SETUP_REPO"
 fi
 if [ -e "$OGH_WORKSPACE" ]; then
   [ -f "$OGH_WORKSPACE/.ogh-workspace.json" ] || { echo "Preserving existing folder. Choose OGH_WORKSPACE=/new/path: $OGH_WORKSPACE" >&2; exit 1; }
+  python3 - "$OGH_WORKSPACE/.ogh-workspace.json" "$OGH_SETUP_REPO" <<'PYREPO'
+import json, sys
+actual = json.load(open(sys.argv[1]))['repository']
+if actual.lower() != sys.argv[2].lower():
+    raise SystemExit(f'Preserving workspace for {actual}; choose a different --folder for {sys.argv[2]}.')
+PYREPO
   git -C "$OGH_WORKSPACE" rev-parse --git-dir >/dev/null
 else
-  base="$(ogh repo view -R open-mercato/open-mercato --json defaultBranchRef --jq .defaultBranchRef.name)"
+  base="$(ogh repo view -R "$OGH_SETUP_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
   mkdir -p "$(dirname "$OGH_WORKSPACE")"
   git --git-dir="$mirror" worktree add --detach "$OGH_WORKSPACE" "origin/$base"
   git -C "$OGH_WORKSPACE" switch -c "offline/work-$(date +%Y%m%d-%H%M%S)-$$"
@@ -134,13 +156,13 @@ if [ ! -d "$skills_dir/.git" ]; then
   git clone --depth 1 https://github.com/open-mercato/skills.git "$skills_dir"
 fi
 echo '🤖 Installing project skills for ogh…'
-python3 "$source_dir/scripts/setup/configure.py" "$OGH_WORKSPACE" "$skills_dir" "$source_dir"
+python3 "$source_dir/scripts/setup/configure.py" "$OGH_WORKSPACE" "$skills_dir" "$source_dir" --repo "$OGH_SETUP_REPO"
 # Helper enters the project, exports PATH/repo, then starts an interactive user shell.
 python3 "$source_dir/scripts/setup/finish.py" "$OGH_WORKSPACE" "$OGH_SETUP_ROOT" "$OGH_SETUP_PORT"
 if [ "$OGH_SETUP_OPEN" = 1 ] && command -v open >/dev/null; then open "http://127.0.0.1:$OGH_SETUP_PORT"; fi
 printf '\n✅ Ready! App: http://127.0.0.1:%s\nProject: %s\n' "$OGH_SETUP_PORT" "$OGH_WORKSPACE"
 echo 'Start pi, codex or claude here. Project skills use ogh; gh remains available for explicit online sync.'
-echo 'Open Mercato application dependencies/services are separate; see its README when running the ERP itself.'
+echo 'Project application dependencies/services are separate; follow its README to run the application.'
 if [ "$OGH_SETUP_SHELL" = 1 ]; then
   exec bash "$HOME/.local/bin/ogh-work"
 fi

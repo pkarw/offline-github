@@ -29,12 +29,16 @@ On **macOS or Linux**, paste this into a terminal while online:
 bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh)
 ```
 
+🐙 Setup first asks for a GitHub repository. Press **Enter** for
+**open-mercato/open-mercato**, or enter another `OWNER/REPO` or GitHub URL.
+Use `--repo OWNER/REPO` to choose directly.
+
 📂 Before installing anything, setup shows all destinations and lets you edit the
 project folder (default: `~/Projects/open-mercato-offline`). Press **Enter** to
 keep it, or add `--folder my-mercato` to the command to choose it directly.
 
 The installer downloads/builds `ogh`, starts the local browser app, caches
-**open-mercato/open-mercato**, creates your development worktree, and installs
+**your selected repository** (Open Mercato by default), creates your development worktree, and installs
 **open-mercato/skills** for Claude, Codex and pi with the **ogh tracker selected**.
 It opens a shell **inside your project**. Run `pi`, `codex` or `claude` there
 (using whichever agent you already have installed and signed into).
@@ -60,7 +64,8 @@ Keep the workspace, tools and GitHub login inside a persistent local microVM:
 bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/sandbox.sh)
 ```
 
-📂 This installer also shows its destinations first and prompts for the guest
+🐙 The sandbox asks for the repository too, defaulting to Open Mercato.
+📂 It shows its destinations first and prompts for the guest
 folder name (default: `/root/Projects/open-mercato-offline`). Add
 `--folder my-mercato` to choose it directly. Both installers support `--plan`
 to preview paths without installing anything.

@@ -6,6 +6,11 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/sandbox.sh)
 ```
 
+🐙 The first prompt asks for a GitHub repository. **Enter** selects
+`open-mercato/open-mercato`; `--repo OWNER/REPO` or a GitHub HTTPS URL selects
+another repository directly. The choice is passed into the guest setup and
+remembered on reentry.
+
 📂 **Before installing anything**, the launcher shows the guest project folder,
 persistent disk, host helper and browser URL. It prompts for a folder name;
 press **Enter** to keep `open-mercato-offline`, or type your own.
@@ -32,7 +37,8 @@ when asked. Install/sign into your preferred agent there too.
 - Browser app: http://127.0.0.1:4183
 - Return later: `~/.local/bin/ogh-sandbox`
 - Stop: `msb stop ogh-mercato`
-- Project inside the guest: `/root/Projects/open-mercato-offline`
+- Default project inside the guest: `/root/Projects/REPO-offline`
+  (`/root/Projects/open-mercato-offline` for Open Mercato)
 - Persistent disk volume: `ogh-mercato-home`, mounted at `/root` (40 GB)
 - VM: 4 CPUs, 8 GB RAM, 32 GB root disk; Node 22 Debian base image.
 

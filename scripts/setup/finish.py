@@ -39,10 +39,12 @@ def finish(workspace, root, port):
         data_dir = json.loads(subprocess.check_output(['ogh', 'app', 'paths'], text=True, timeout=15))['data_dir']
     data_dir = str(Path(data_dir).expanduser().resolve())
     os.environ['OGH_DATA_DIR'] = data_dir
+    manifest = workspace / '.ogh-workspace.json'
+    repository = json.loads(manifest.read_text())['repository'] if manifest.exists() else 'open-mercato/open-mercato'
     launcher = Path.home() / '.local/bin/ogh-work'
     launcher.parent.mkdir(parents=True, exist_ok=True)
     content = ('#!/usr/bin/env bash\nset -e\nexport PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"\n'
-               'export OGH_REPO=open-mercato/open-mercato\n'
+               f'export OGH_REPO={shlex.quote(repository)}\n'
                f'export OGH_DATA_DIR={shlex.quote(data_dir)}\n'
                f'cd {shlex.quote(str(workspace))}\nexec "${{SHELL:-/bin/bash}}" -i\n')
     install_helper(launcher, content)

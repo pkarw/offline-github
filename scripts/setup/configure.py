@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 
-def configure(workspace, skills, source):
+def configure(workspace, skills, source, repository='open-mercato/open-mercato'):
     workspace, skills, source = map(Path, (workspace, skills, source))
     ai = workspace / '.ai'
     ai.mkdir(exist_ok=True)
@@ -61,7 +61,7 @@ def configure(workspace, skills, source):
                 continue
             link.symlink_to(destination.resolve(), target_is_directory=True)
         installed.append(skill.name)
-    metadata = {'repository': 'open-mercato/open-mercato', 'skills': installed,
+    metadata = {'repository': repository, 'skills': installed,
                 'tracker': 'offline-github', 'managedBy': 'ogh-setup-v1'}
     write(workspace / '.ogh-workspace.json', json.dumps(metadata, indent=2) + '\n')
     print(f'Configured {len(installed)} project skills for ogh (Claude, Codex, pi).')
@@ -72,5 +72,6 @@ if __name__ == '__main__':
     parser.add_argument('workspace')
     parser.add_argument('skills')
     parser.add_argument('source')
+    parser.add_argument('--repo', default='open-mercato/open-mercato')
     args = parser.parse_args()
-    configure(args.workspace, args.skills, args.source)
+    configure(args.workspace, args.skills, args.source, args.repo)

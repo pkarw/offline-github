@@ -130,7 +130,7 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(list(plan_home.iterdir()), [])
             self.assertIn('/Projects/My Mercato', result.stdout)
             self.assertIn('📂', result.stdout)
-            result = subprocess.run(['bash', path, '--interactive', '--plan'], input='Flight Work\n',
+            result = subprocess.run(['bash', path, '--interactive', '--plan'], input='\nFlight Work\n',
                                     capture_output=True, text=True, check=True, timeout=10)
             self.assertIn('/Projects/Flight Work', result.stdout)
             result = subprocess.run(['bash', path, '--interactive', '--plan'], input='',
@@ -145,6 +145,34 @@ class SetupTests(unittest.TestCase):
                                  capture_output=True, text=True, timeout=10)
         self.assertNotEqual(invalid.returncode, 0)
 
+    def test_repository_prompt_default_url_and_validation(self):
+        for script in ('setup.sh', 'sandbox.sh'):
+            path = str(ROOT / 'scripts' / script)
+            for value in ('acme/widget', 'https://github.com/acme/widget.git'):
+                result = subprocess.run(['bash', path, '--repo', value, '--no-prompt', '--plan'],
+                                        capture_output=True, text=True, check=True, timeout=10)
+                self.assertIn('Selected repository: acme/widget', result.stdout)
+                self.assertIn('/Projects/widget-offline', result.stdout)
+            for reply, expected in (('\n\n', 'open-mercato/open-mercato'), ('acme/widget\n\n', 'acme/widget')):
+                result = subprocess.run(['bash', path, '--interactive', '--plan'], input=reply,
+                                        capture_output=True, text=True, check=True, timeout=10)
+                self.assertIn('GitHub repository (Enter', result.stdout)
+                self.assertIn('Selected repository: ' + expected, result.stdout)
+            for args in (['--repo'], ['--repo', '--plan'], ['--repo', 'bad;repo', '--plan']):
+                result = subprocess.run(['bash', path, *args], capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_selected_repository_is_retained_in_manifest_and_helper(self):
+        configure.configure(self.work, self.skills, ROOT, 'acme/widget')
+        self.assertEqual(json.loads((self.work / '.ogh-workspace.json').read_text())['repository'], 'acme/widget')
+        cache = str(self.root / 'cache')
+        import io
+        response = io.BytesIO(json.dumps({'status': 'ok', 'outgoing_queue': True, 'data_dir': cache}).encode())
+        with patch.dict(os.environ, {'HOME': str(self.root), 'OGH_DATA_DIR': cache}):
+            with patch('urllib.request.urlopen', return_value=response):
+                finish.finish(self.work, self.root / 'state', 4181)
+        self.assertIn('export OGH_REPO=acme/widget', (self.root / '.local/bin/ogh-work').read_text())
+
     def test_sandbox_folder_reaches_bootstrap_and_reentry(self):
         # Exercise the whole launcher without virtualization, downloads or host writes.
         bindir = self.root / '.microsandbox/bin'
@@ -158,12 +186,13 @@ class SetupTests(unittest.TestCase):
         opener = bindir / 'open'
         opener.write_text('#!/bin/sh\nexit 0\n')
         opener.chmod(0o755)
-        subprocess.run(['bash', str(ROOT / 'scripts/sandbox.sh'), '--folder', 'My Mercato'],
+        subprocess.run(['bash', str(ROOT / 'scripts/sandbox.sh'), '--repo', 'acme/widget', '--folder', 'My Mercato'],
                        env=dict(os.environ, HOME=str(self.root)), capture_output=True, text=True, check=True, timeout=15)
         calls = [json.loads(line) for line in log.read_text().splitlines()]
         bootstrap = next(call for call in calls if '--folder' in call)
         self.assertEqual(bootstrap[bootstrap.index('--folder') + 1], '/root/Projects/My Mercato')
         self.assertIn('--no-prompt', bootstrap)
+        self.assertEqual(bootstrap[bootstrap.index('--repo') + 1], 'acme/widget')
         helper = (self.root / '.local/bin/ogh-sandbox').read_text()
         self.assertIn("--env 'OGH_WORKSPACE=/root/Projects/My Mercato'", helper)
         self.assertIn('finish.py "$OGH_WORKSPACE"', helper)
