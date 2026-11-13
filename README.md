@@ -70,6 +70,7 @@ The app opens at **http://127.0.0.1:4183**. Return later with
 - [Setup options, prerequisites and troubleshooting](docs/SETUP.md)
 - [App and CLI guide — sync, offline work, outgoing changes and recovery](docs/GUIDE.md)
 - [Microsandbox setup and persistence](docs/SANDBOX.md)
+- [gh vs ogh feature parity](docs/FEATURE-PARITY.md)
 - [Open Mercato skills: supported operations and limits](docs/skills-compatibility.md)
 - [Offline tracker contract](docs/trackers/offline-github.md)
 - [Local API](docs/API.md) · [Outgoing API and durability](docs/OUTBOX.md)
