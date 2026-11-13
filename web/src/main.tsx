@@ -37,6 +37,16 @@ import {
   type Comment,
 } from "./api";
 import "./style.css";
+import {
+  Outgoing,
+  QueueDialog,
+  LocalDiscussion,
+  Marker,
+  EventCard,
+  pending,
+  type Outbox,
+  type Event as OutboxEvent,
+} from "./outbox";
 const date = (s?: string | null) =>
   s
     ? new Date(s).toLocaleString(undefined, {
@@ -112,6 +122,26 @@ function App() {
     [adding, setAdding] = useState(false),
     [addError, setAddError] = useState(""),
     [mobile, setMobile] = useState(false);
+  const [outbox, setOutbox] = useState<Outbox>({ events: [], counts: {} });
+  const [preview, setPreview] = useState<Outbox | null>(null);
+  const [previewRepo, setPreviewRepo] = useState("");
+  const refreshOutbox = () => setVersion((v) => v + 1);
+  useEffect(() => {
+    if (!selected) return;
+    let current = true;
+    setOutbox({ events: [], counts: {} });
+    api<Outbox>(`/api/outbox?${new URLSearchParams({ repo: selected })}`)
+      .then((data) => {
+        if (current) setOutbox(data);
+      })
+      .catch((e) => {
+        if (current) setError(e.message);
+      });
+    return () => {
+      current = false;
+    };
+  }, [selected, version]);
+  const outgoingCount = outbox.events.filter(pending).length;
   const repo = repos.find((r) => r.full_name === selected);
   async function loadRepos() {
     const data = await api<Repo[]>("/api/repos");
@@ -124,7 +154,7 @@ function App() {
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => {
-    if (!selected || page === "code") return;
+    if (!selected || page === "code" || page === "outgoing") return;
     let current = true;
     setLoading(true);
     setError("");
@@ -176,13 +206,37 @@ function App() {
     setError("");
     setNotice("");
     try {
-      const result = await api<{ message: string }>(
-        repoUrl(selected) + "/sync",
-        { method: "POST" },
+      const plan = await api<Outbox>("/api/outbox/sync", {
+        method: "POST",
+        body: JSON.stringify({ repo: selected, dry_run: true }),
+      });
+      setPreviewRepo(selected);
+      setPreview(plan);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+  async function executeSync() {
+    setSyncing(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api<Outbox>("/api/outbox/sync", {
+        method: "POST",
+        body: JSON.stringify({ repo: previewRepo }),
+      });
+      const remaining = result.events.filter(pending).length;
+      const errors =
+        result.incoming_errors &&
+        Object.keys(result.incoming_errors as object).length > 0;
+      setNotice(
+        `${remaining ? `${remaining} outgoing changes remain unresolved.` : "Outgoing changes reconciled."}${errors ? ` Cache refresh errors: ${JSON.stringify(result.incoming_errors)}` : " Incoming refresh completed."}`,
       );
-      setNotice(result.message || "Repository is up to date.");
+      setPreview(null);
       await loadRepos();
-      setVersion((v) => v + 1);
+      refreshOutbox();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -284,7 +338,7 @@ function App() {
             the source of truth.
           </p>
           <span className="version">
-            READ-ONLY WORKSPACE <span>v0.1</span>
+            LOCAL-FIRST WORKSPACE <span>v0.1</span>
           </span>
         </div>
       </aside>
@@ -306,7 +360,7 @@ function App() {
             <span className="local-tag">Local copy</span>
           </div>
           <span className="readonly">
-            <span className="green-dot" /> Read only
+            <span className="green-dot" /> Local queue
           </span>
         </header>
         <main>
@@ -322,11 +376,11 @@ function App() {
             <div className="sync-group">
               <Button onClick={sync} disabled={!selected || syncing}>
                 <RefreshCw size={15} className={syncing ? "spin" : ""} />
-                {syncing ? "Syncing repository…" : "Sync from GitHub"}
+                {syncing ? "Syncing repository…" : "Preview sync"}
               </Button>
               <small>
                 {syncing
-                  ? "Downloading changes. This may take a moment."
+                  ? "Preparing / syncing changes. This may take a moment."
                   : `Last synced ${date(repo?.last_sync)}`}
               </small>
             </div>
@@ -362,6 +416,7 @@ function App() {
                   ["issue", "Issues", CircleDot, repo?.issue_count],
                   ["pr", "Pull requests", GitPullRequest, repo?.pr_count],
                   ["code", "Code", Code2, null],
+                  ["outgoing", "Outgoing", Inbox, outgoingCount],
                 ].map(([id, label, Icon, count]) => {
                   const I = Icon as typeof CircleDot;
                   return (
@@ -386,7 +441,13 @@ function App() {
                   <WifiOff size={13} /> Available offline after sync
                 </span>
               </div>
-              {page === "code" ? (
+              {page === "outgoing" ? (
+                <Outgoing
+                  data={outbox}
+                  repo={selected}
+                  refresh={refreshOutbox}
+                />
+              ) : page === "code" ? (
                 <CodeBrowser repo={selected} version={version} />
               ) : number !== null ? (
                 <>
@@ -404,12 +465,39 @@ function App() {
                         detail={detail}
                         repo={selected}
                         isPr={page === "pr"}
+                        events={outbox.events.filter(
+                          (e) => e.target === String(number),
+                        )}
+                        refresh={refreshOutbox}
                       />
                     )
                   )}
                 </>
               ) : (
                 <>
+                  <div className="queue-actions">
+                    <QueueDialog
+                      repo={selected}
+                      kind="issue_create"
+                      refresh={refreshOutbox}
+                    >
+                      New issue
+                    </QueueDialog>
+                    <QueueDialog
+                      repo={selected}
+                      kind="label_create"
+                      refresh={refreshOutbox}
+                    >
+                      New label
+                    </QueueDialog>
+                    <QueueDialog
+                      repo={selected}
+                      kind="pr_create"
+                      refresh={refreshOutbox}
+                    >
+                      New pull request
+                    </QueueDialog>
+                  </div>
                   <div className="list-toolbar">
                     <div className="state-control">
                       {["open", "closed", "all"].map((s) => (
@@ -482,6 +570,14 @@ function App() {
                           <div className="item-text">
                             <div className="item-title">
                               {i.title}{" "}
+                              {outbox.events
+                                .filter(
+                                  (e) =>
+                                    e.target === String(i.number) && pending(e),
+                                )
+                                .map((e) => (
+                                  <Marker key={e.id} event={e} />
+                                ))}
                               {i.labels?.map((l) => (
                                 <span
                                   className="label"
@@ -524,12 +620,57 @@ function App() {
           )}
           <footer>
             <span>
-              <img src="/brand/mark.svg" width={16} height={16} alt="" /> Offline GitHub
+              <img src="/brand/mark.svg" width={16} height={16} alt="" />{" "}
+              Offline GitHub
             </span>
             <span>A little less connected. Just as productive.</span>
           </footer>
         </main>
       </div>
+      <Dialog.Root
+        open={preview !== null}
+        onOpenChange={(v) => {
+          if (!v && !syncing) setPreview(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="dialog-overlay" />
+          <Dialog.Content className="dialog-content queue-dialog">
+            <Dialog.Title>Sync preview · {previewRepo}</Dialog.Title>
+            <Dialog.Description>
+              Review saved changes below. Confirming sends queued work to
+              GitHub, then downloads incoming changes. Conflicts remain queued
+              for your decision.
+            </Dialog.Description>
+            {preview?.events.filter(pending).map((e) => (
+              <EventCard
+                key={e.id}
+                event={e}
+                refresh={() => {
+                  setPreview(null);
+                  refreshOutbox();
+                }}
+              />
+            ))}
+            {!preview?.events.some(pending) && (
+              <p>
+                No outgoing changes. This sync only downloads incoming changes.
+              </p>
+            )}
+            {error && <ErrorBox error={error} />}
+            <div className="queue-actions">
+              <Button disabled={syncing} onClick={() => setPreview(null)}>
+                Cancel
+              </Button>
+              <Button disabled={syncing} onClick={executeSync}>
+                {syncing
+                  ? "Syncing…"
+                  : `Sync ${preview?.events.filter(pending).length || 0} changes`}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <Dialog.Root open={addOpen} onOpenChange={setAddOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="dialog-overlay" />
@@ -573,10 +714,14 @@ function ItemDetail({
   detail: d,
   repo,
   isPr,
+  events,
+  refresh,
 }: {
   detail: Detail;
   repo: string;
   isPr: boolean;
+  events: OutboxEvent[];
+  refresh: () => void;
 }) {
   const [copied, setCopied] = useState(false),
     [copyError, setCopyError] = useState("");
@@ -608,6 +753,47 @@ function ItemDetail({
           </code>
         )}
       </div>
+      <div className="queue-actions">
+        <QueueDialog
+          repo={repo}
+          kind="edit"
+          target={String(d.item.number)}
+          initial={{
+            title: d.item.title,
+            body: d.item.body || "",
+            item_kind: isPr ? "pr" : "issue",
+          }}
+          refresh={refresh}
+        >
+          Edit title and body
+        </QueueDialog>
+        <QueueDialog
+          repo={repo}
+          kind="labels"
+          target={String(d.item.number)}
+          refresh={refresh}
+        >
+          Add / remove labels
+        </QueueDialog>
+      </div>
+      <div className="queue-actions">
+        {d.item.labels?.map((l) => (
+          <span className="label" key={l.name}>
+            {l.name}
+          </span>
+        ))}
+      </div>
+      {events
+        .filter((e) => ["edit", "labels"].includes(e.kind) && pending(e))
+        .map((e) => (
+          <div className="queued-field" key={e.id}>
+            <strong>
+              {e.kind === "edit" ? "Title / body change" : "Label change"}
+            </strong>{" "}
+            <Marker event={e} />
+            <pre>{JSON.stringify(e.payload, null, 2)}</pre>
+          </div>
+        ))}
       {isPr && (
         <div className="checkout">
           <div>
@@ -655,9 +841,20 @@ function ItemDetail({
           {d.comments.map((c) => (
             <CommentCard key={c.id} c={c} />
           ))}
+          <LocalDiscussion
+            events={events}
+            detail={d}
+            repo={repo}
+            refresh={refresh}
+          />
         </Tabs.Content>
         <Tabs.Content value="reviews">
-          {d.reviews_cached === false && d.reviews.length > 0 && <p className="muted">Review summaries may be stale. Run ogh sync -R {repo} --reviews to refresh them.</p>}
+          {d.reviews_cached === false && d.reviews.length > 0 && (
+            <p className="muted">
+              Review summaries may be stale. Run ogh sync -R {repo} --reviews to
+              refresh them.
+            </p>
+          )}
           {!d.reviews.length && !d.review_comments.length && (
             <Empty title="No reviews cached">
               Run ogh sync -R {repo} --reviews to download review summaries.
@@ -682,8 +879,12 @@ function ItemDetail({
                 <FileText size={15} />
                 <code>{f.filename}</code>
                 <span>{f.status}</span>
-                <b className="green">{f.additions == null ? "binary" : `+${f.additions}`}</b>
-                <b className="red">{f.deletions == null ? "" : `−${f.deletions}`}</b>
+                <b className="green">
+                  {f.additions == null ? "binary" : `+${f.additions}`}
+                </b>
+                <b className="red">
+                  {f.deletions == null ? "" : `−${f.deletions}`}
+                </b>
               </div>
               <Diff
                 text={
@@ -696,7 +897,11 @@ function ItemDetail({
         </Tabs.Content>
         <Tabs.Content value="diff">
           {d.diff_error && <ErrorBox error={d.diff_error} />}
-          {d.diff_truncated && <p className="muted">Preview limited to 4 MB. Use ogh pr diff for the full patch.</p>}
+          {d.diff_truncated && (
+            <p className="muted">
+              Preview limited to 4 MB. Use ogh pr diff for the full patch.
+            </p>
+          )}
           <Diff
             text={
               d.diff ||
