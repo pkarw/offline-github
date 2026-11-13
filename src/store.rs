@@ -15,6 +15,10 @@ pub struct Snapshot {
     pub last_sync: Option<String>,
     pub items: BTreeMap<u64, Value>,
     pub details: BTreeMap<u64, Value>,
+    #[serde(default)]
+    pub metadata: Value,
+    #[serde(default)]
+    pub resources: BTreeMap<String, Value>,
 }
 pub fn validate_repo(name: &str) -> Result<()> {
     let parts: Vec<_> = name.split('/').collect();
@@ -87,6 +91,8 @@ impl Store {
             last_sync: None,
             items: BTreeMap::new(),
             details: BTreeMap::new(),
+            metadata: Value::Null,
+            resources: BTreeMap::new(),
         };
         self.save(&s)?;
         self.summary(&s)

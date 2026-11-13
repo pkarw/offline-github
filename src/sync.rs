@@ -66,6 +66,7 @@ pub fn sync(store: &Store, repo: &str, reviews: bool, full: bool) -> Result<Valu
         .unwrap_or_default();
     eprintln!("Syncing {repo}: repository and issue delta…");
     let metadata = api(&format!("repos/{repo}"))?;
+    s.metadata = metadata.clone();
     s.description = metadata["description"].as_str().unwrap_or("").into();
     s.default_branch = metadata["default_branch"]
         .as_str()
