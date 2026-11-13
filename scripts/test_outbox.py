@@ -38,7 +38,13 @@ elif c[3:] == ['issues']:
   data['items'][str(n)]=result
  else:result=list(data['items'].values())
 elif c[3:] == ['issues','comments']: result=data['comments']
-elif c[3:] == ['pulls'] or c[3:]==['pulls','comments']:result=[]
+elif c[3:] == ['pulls']:
+ if method=='POST':
+  n=max(map(int,data['items']))+1
+  result=dict(body,number=n,state='open',user={'login':'tester'},pull_request={},html_url='https://github.com/test/repo/pull/'+str(n))
+  data['items'][str(n)]=result
+ else:result=[v for v in data['items'].values() if 'pull_request' in v]
+elif c[3:]==['pulls','comments']:result=[]
 elif len(c)==5 and c[3]=='issues':
  item=data['items'].get(c[4]);
  if item is None:missing()
@@ -220,6 +226,46 @@ class OutboxTests(unittest.TestCase):
   self.assertEqual(self.sync()['counts']['applied'],1)
   remote=run('git','--git-dir',self.d/'origin.git','rev-parse','refs/heads/offline-work').stdout.strip()
   self.assertEqual(remote,pin)
+ def test_offline_issue_branch_pr_publication_and_durable_history(self):
+  work=self.d/'feature'
+  self.j('branch','create','feature/offline','--dir',work,'-R','test/repo')
+  run('git','-C',work,'config','user.name','Test');run('git','-C',work,'config','user.email','test@example.org')
+  (work/'README.md').write_text('Offline feature\n')
+  self.cmd('commit','--dir',work,'--all','-m','Build offline feature','-R','test/repo')
+  issue=self.j('issue','create','--title','Offline issue','--body','Saved offline','-R','test/repo')
+  branch=self.j('branch','publish','feature/offline','-R','test/repo')
+  pr=self.j('pr','create','--head','feature/offline','--base','main','--draft','--title','Offline PR','--body','Offline implementation','-R','test/repo')
+  self.assertIn(branch['id'],pr['depends_on'])
+  self.assertFalse((self.d/'requests').exists(),'Creating drafts and branches must stay offline')
+  preview=self.j('outbox','sync','--dry-run','-R','test/repo')
+  self.assertEqual(preview['counts']['queued'],3)
+  self.assertFalse((self.d/'requests').exists())
+  result=self.j('outbox','sync','--yes','--plan-token',preview['plan_token'],'-R','test/repo')
+  self.assertEqual(result['counts']['applied'],3);self.assertEqual(result['incoming_errors'],[])
+  snapshot=json.loads((self.d/'cache/test/repo/snapshot.json').read_text())
+  self.assertEqual(len(snapshot['items']),3,'Published issue and PR must return through Pull')
+  remote=self.load_state();prs=[v for v in remote['items'].values() if 'pull_request' in v]
+  self.assertEqual(len(prs),1);self.assertTrue(prs[0]['draft']);self.assertEqual(prs[0]['head'],'feature/offline')
+  self.assertEqual(run('git','--git-dir',self.d/'origin.git','rev-parse','refs/heads/feature/offline').stdout.strip(),branch['payload']['sha'])
+  self.assertEqual(self.sync()['counts']['applied'],3)
+  self.assertEqual(len(self.load_state()['items']),3,'Repeated Push must not duplicate issue/PR creation')
+  # Each call starts a fresh CLI process: receipts, payloads and history survive restarts.
+  events={e['id']:e for e in self.events()}
+  for queued in [issue,branch,pr]:
+   event=events[queued['id']];self.assertEqual(event['status'],'applied');self.assertTrue(event['remote'])
+   self.assertEqual(event['payload'],queued['payload'])
+   self.assertIn('github_confirmed',[h['action'] for h in event['history']])
+  report=self.cmd('outbox','report','--format','md','-R','test/repo').stdout
+  self.assertIn(pr['id'],report);self.assertIn('Offline PR',report)
+  self.assertIn('Build offline feature',run('git','-C',work,'log','--oneline').stdout)
+ def test_pr_head_change_is_conflict_with_history_retained(self):
+  self.j('branch','create','reviewed-head','--dir',self.d/'work','-R','test/repo')
+  pr=self.j('pr','create','--head','reviewed-head','--base','main','--title','Pinned PR','--body','Keep draft','-R','test/repo')
+  self.state['branches']['reviewed-head']='f'*40;self.write_state()
+  self.assertEqual(self.sync()['counts']['conflict'],1)
+  event=self.events()[0];self.assertEqual(event['id'],pr['id']);self.assertEqual(event['payload']['body'],'Keep draft')
+  self.assertEqual(len(self.load_state()['items']),1,'Changed head must not open an unreviewed PR')
+  self.assertTrue(event['history']);self.assertEqual(event['base']['head_sha'],self.sha)
  def test_remote_branch_collision_never_force_pushes(self):
   self.j('branch','create','taken','--dir',self.d/'work','-R','test/repo')
   self.j('branch','publish','taken','-R','test/repo')

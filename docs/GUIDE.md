@@ -112,6 +112,48 @@ New issues/PRs return an event id. You can queue a follow-up comment before crea
 
 The UI provides comment composers, issue/PR drafts, title/body proposals and label forms. **Outgoing** shows all changes and their history. Local comments remain visible through reloads and are replaced by the confirmed cached GitHub comment without duplication.
 
+### 🌱 Create an issue, branch and PR offline
+
+After an initial Pull, this entire preparation works without a network connection:
+
+```sh
+ogh issue create -R open-mercato/open-mercato --title 'Fix checkout' --body 'Description…'
+ogh branch create fix-checkout -R open-mercato/open-mercato --from origin/main --dir ../fix-checkout
+cd ../fix-checkout
+# Edit files, then stage the intended changes:
+git add path/to/file
+ogh commit -R open-mercato/open-mercato --dir "$PWD" -m 'Fix checkout'
+ogh branch publish fix-checkout -R open-mercato/open-mercato
+ogh pr create -R open-mercato/open-mercato --head fix-checkout --base main --title 'Fix checkout' --body 'Implementation…' --draft
+```
+
+`branch publish` queues publication; it does not connect immediately. Queue it before
+`pr create`: the PR then waits for confirmed branch publication. Push uses the pinned
+commit and blocks if the remote branch has changed. You need GitHub permission to
+publish the branch and create items in the selected repository; automatic fork
+creation is not supported.
+
+When connected, review **Outgoing → Push changes**, or use:
+
+```sh
+ogh outbox sync -R open-mercato/open-mercato --dry-run
+# After reviewing the preview:
+ogh outbox sync -R open-mercato/open-mercato --yes
+ogh outbox report -R open-mercato/open-mercato --format json > outgoing.json
+ogh outbox report -R open-mercato/open-mercato --format md > outgoing.md
+```
+
+The CLI Push also refreshes incoming data afterward. In the web UI, use **Pull from
+GitHub** to refresh the published issue/PR list separately. Local drafts are visible
+in **Outgoing** before GitHub assigns their issue/PR numbers.
+
+Git stores branch and commit history (`git log` in the worktree). The outbox retains
+queued payloads, dependencies, attempts, conflicts, timestamps and confirmed GitHub
+receipts, including applied and cancelled changes. Reports export this audit history;
+back up all of `~/.offline-github` plus your worktrees to preserve Git objects and
+uncommitted files too. Branch creation and commits are native Git operations, not
+separate outbox events; their publication is audited in the outbox.
+
 ### Title/body/state edits: preserve before overwrite
 
 GitHub does not support atomic version preconditions for these issue/PR updates. Under the default no-overwrite policy, Sync compares the saved base with the observed GitHub version. Competing edits become conflicts. Otherwise, it posts an **append-only proposal comment**, preserving the desired fields and original version, and keeps the edit marked unresolved until you apply it manually on GitHub and recheck it. It never silently overwrites someone else's racing edit. See [GitHub's conditional request limits](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests-if-appropriate).
@@ -139,7 +181,7 @@ Agents can supply the `plan_token` returned by the dry run to `--plan-token TOKE
 - Label additions/removals are deltas rather than replacing the whole label set. An existing differently defined repository label is a conflict.
 - Git publication uses explicit commit SHAs and ordinary fast-forward pushes. No force pushes. A competing remote branch change stays conflicted; merge/rebase in your local worktree, resolve Git conflicts, and queue a new publication.
 - Related operations wait for confirmed dependencies. Successful events are not rolled back when another event fails.
-- After outgoing processing, incoming data is refreshed. A download failure does not erase outgoing confirmations; the UI reports it separately.
+- CLI outgoing processing refreshes incoming data afterward; the UI keeps Pull separate. A download failure does not erase outgoing confirmations.
 
 ```bash
 # Resolve a conflicting field baseline / recheck after applying an edit proposal:
