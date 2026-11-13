@@ -9,3 +9,7 @@ node_modules/
 /web/dist/
 /playwright-report/
 /test-results/
+
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

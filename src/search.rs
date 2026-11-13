@@ -137,7 +137,7 @@ impl Search {
                     "base" | "head" => item[key]["ref"].as_str() == Some(v),
                     "draft" => item["draft"].as_bool().unwrap_or(false) == (v == "true"),
                     "repo" => repo.eq_ignore_ascii_case(v),
-                    "number" => item["number"].to_string() == v,
+                    "number" => item["number"].as_u64() == v.parse::<u64>().ok(),
                     "created" | "updated" | "closed" | "merged" => {
                         date_match(item[format!("{key}_at")].as_str().unwrap_or(""), v)?
                     }

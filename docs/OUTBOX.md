@@ -16,7 +16,7 @@ deletion of applied operations. No implicit upstream mutation on a read or pull.
   - `pr_create`: `{title,body,head,base,draft?:bool}`
   - `review`: `{body,event:"COMMENT"|"APPROVE"|"REQUEST_CHANGES",commit_id}`
   - `branch_push`: `{branch,sha}` (usually queued from CLI; commit SHA must already exist locally)
-- POST `/api/outbox/sync` `{repo?,dry_run?:bool}` → `{events,counts,incoming_errors}`. dry_run true returns plan without network or upstream writes. Actual sync reconciles interrupted sends before retry, checks remote conflicts, sends queued work, then pulls each selected repo; cache-refresh failures are reported without undoing confirmed outgoing results.
+- POST `/api/outbox/sync` `{repo?,dry_run?:bool,plan_token?:string}` → `{events,counts,incoming_errors}`. dry_run true returns plan without network or upstream writes. A dry-run report returns `plan_token`; actual HTTP sync requires this token and rejects changes queued/resolved since preview. Actual sync reconciles interrupted sends before retry, checks remote conflicts, sends queued work, then pulls each selected repo; cache-refresh failures are reported without undoing confirmed outgoing results.
 - POST `/api/outbox/:id/resolve` `{action:"retry"|"use_local"|"keep_remote"}` → Event. retry requeues failed/uncertain sends for reconciliation; use_local explicitly rebases a conflicting edit against the last observed remote fields, preserving old base/payload in audit; keep_remote cancels the local intent but preserves it and all history in report.
 
 Event: `{id,seq,repo,kind,target:string|null,payload,base,depends_on,status,created_at,updated_at,attempts,remote:null|GitHubResponse,error:null|string,observed:null|object,history:[{at,action,data}]}`.

@@ -21,6 +21,7 @@ export type Outbox = {
   events: Event[];
   counts: Record<string, number>;
   incoming_errors?: unknown;
+  plan_token?: string;
 };
 export const pending = (e: Event) =>
   !["applied", "cancelled"].includes(e.status);
@@ -104,6 +105,7 @@ export function EventCard({
             </Button>
           </>
         )}
+        {["queued", "failed"].includes(e.status) && <Button disabled={busy} onClick={() => resolve("keep_remote")}>Cancel queued change</Button>}
         {["failed", "uncertain"].includes(e.status) && (
           <Button disabled={busy} onClick={() => resolve("retry")}>
             Retry safely

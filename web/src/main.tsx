@@ -126,21 +126,17 @@ function App() {
   const [preview, setPreview] = useState<Outbox | null>(null);
   const [previewRepo, setPreviewRepo] = useState("");
   const refreshOutbox = () => setVersion((v) => v + 1);
+  useEffect(() => { setOutbox({ events: [], counts: {} }); }, [selected]);
   useEffect(() => {
     if (!selected) return;
     let current = true;
-    setOutbox({ events: [], counts: {} });
-    api<Outbox>(`/api/outbox?${new URLSearchParams({ repo: selected })}`)
-      .then((data) => {
-        if (current) setOutbox(data);
-      })
-      .catch((e) => {
-        if (current) setError(e.message);
-      });
-    return () => {
-      current = false;
-    };
-  }, [selected, version]);
+    const load = () => api<Outbox>(`/api/outbox?${new URLSearchParams({ repo: selected })}`)
+      .then((data) => { if (current) setOutbox(data); })
+      .catch((e) => { if (current) setError(e.message); });
+    load();
+    const timer = window.setInterval(load, syncing ? 1500 : 5000);
+    return () => { current = false; window.clearInterval(timer); };
+  }, [selected, version, syncing]);
   const outgoingCount = outbox.events.filter(pending).length;
   const repo = repos.find((r) => r.full_name === selected);
   async function loadRepos() {
@@ -225,7 +221,7 @@ function App() {
     try {
       const result = await api<Outbox>("/api/outbox/sync", {
         method: "POST",
-        body: JSON.stringify({ repo: previewRepo }),
+        body: JSON.stringify({ repo: previewRepo, plan_token: preview?.plan_token }),
       });
       const remaining = result.events.filter(pending).length;
       const errors =

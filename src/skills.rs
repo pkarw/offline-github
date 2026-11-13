@@ -234,7 +234,7 @@ pub fn prepare(store: &Store, repo: &str, n: u64, logs: bool) -> Result<Value> {
         json!({"repository":repo,"number":n,"head_sha":expected_sha,"prepared_at":at,"comments":count,"commits":commits.len(),"files":files.len(),"runs":runs.len(),"gaps":gaps,"read_only":true,"live_merge_authorization":false}),
     )
 }
-fn prepared<'a>(s: &'a Snapshot, n: u64) -> Result<&'a Value> {
+fn prepared(s: &Snapshot, n: u64) -> Result<&Value> {
     let d = s.details.get(&n).context("PR is not cached")?;
     anyhow::ensure!(d["item"].get("pull_request").is_some(), "Item is not a PR");
     anyhow::ensure!(

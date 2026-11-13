@@ -6,5 +6,6 @@ cargo clippy --all-targets -- -D warnings
 cargo test --locked
 cargo build --locked
 python3 scripts/smoke.py
+python3 scripts/test_outbox.py
 npm --prefix web ci
 npm --prefix web run build

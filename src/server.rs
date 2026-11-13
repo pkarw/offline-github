@@ -1,4 +1,4 @@
-use crate::{repository, store::Store, sync};
+use crate::{outbox, repository, store::Store, sync};
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, Method, StatusCode},
@@ -125,6 +125,82 @@ async fn blob(
     })
     .await
 }
+
+async fn outgoing(State(s): State<Store>, Query(q): Query<HashMap<String, String>>) -> Response {
+    let md = q.get("format").is_some_and(|v| v == "md");
+    let result = blocking(move || {
+        outbox::report(
+            &s,
+            q.get("repo").map(String::as_str),
+            q.get("target").map(String::as_str),
+        )
+    })
+    .await;
+    match result {
+        Ok(Json(value)) if md => match outbox::markdown(&value) {
+            Ok(text) => (
+                [
+                    ("content-type", "text/markdown; charset=utf-8"),
+                    (
+                        "content-disposition",
+                        "attachment; filename=outgoing-changes.md",
+                    ),
+                ],
+                text,
+            )
+                .into_response(),
+            Err(e) => err(e.to_string()).into_response(),
+        },
+        other => other.into_response(),
+    }
+}
+async fn queue(State(s): State<Store>, Json(intent): Json<outbox::Intent>) -> ApiResult {
+    blocking(move || Ok(serde_json::to_value(outbox::enqueue(&s, intent)?)?)).await
+}
+#[derive(Deserialize)]
+struct OutgoingSync {
+    repo: Option<String>,
+    #[serde(default)]
+    dry_run: bool,
+    plan_token: Option<String>,
+}
+async fn send_outgoing(State(s): State<Store>, Json(input): Json<OutgoingSync>) -> ApiResult {
+    blocking(move || {
+        if let Some(repo) = &input.repo {
+            crate::store::validate_repo(repo)?;
+        }
+        anyhow::ensure!(
+            input.dry_run || input.plan_token.is_some(),
+            "Sync requires the reviewed plan_token from a dry-run preview"
+        );
+        outbox::sync(
+            &s,
+            input.repo.as_deref(),
+            input.dry_run,
+            true,
+            input.plan_token.as_deref(),
+        )
+    })
+    .await
+}
+#[derive(Deserialize)]
+struct Resolution {
+    action: String,
+}
+async fn resolve_outgoing(
+    State(s): State<Store>,
+    Path(id): Path<String>,
+    Json(input): Json<Resolution>,
+) -> ApiResult {
+    blocking(move || {
+        Ok(serde_json::to_value(outbox::resolve(
+            &s,
+            &id,
+            &input.action,
+        )?)?)
+    })
+    .await
+}
 pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> {
     let index = web.join("index.html");
     anyhow::ensure!(
@@ -135,8 +211,13 @@ pub async fn serve(store: Store, port: u16, web: PathBuf) -> anyhow::Result<()> 
     let app = Router::new()
         .route(
             "/api/health",
-            get(|| async { Json(json!({"status":"ok","read_only":true})) }),
+            get(|| async {
+                Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true}))
+            }),
         )
+        .route("/api/outbox", get(outgoing).post(queue))
+        .route("/api/outbox/sync", post(send_outgoing))
+        .route("/api/outbox/{id}/resolve", post(resolve_outgoing))
         .route("/api/repos", get(repos).post(add))
         .route("/api/repos/{o}/{r}/sync", post(sync_repo))
         .route("/api/repos/{o}/{r}/items", get(items))
