@@ -1,6 +1,7 @@
 mod app;
 mod format;
 mod launcher;
+mod media;
 mod offline_api;
 mod outbox;
 mod process;

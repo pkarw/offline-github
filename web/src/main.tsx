@@ -60,6 +60,26 @@ const date = (s?: string | null) =>
         minute: "2-digit",
       })
     : "Never synced";
+function CachedImage({ src, alt }: { src?: string; alt?: string }) {
+  const [failed, setFailed] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => setFailed(false), [src]);
+  useEffect(() => {
+    const retry = () => { setFailed(false); setRevision(value => value + 1); };
+    window.addEventListener("ogh-images-pulled", retry);
+    return () => window.removeEventListener("ogh-images-pulled", retry);
+  }, []);
+  if (!src || failed) return <span className="image-placeholder">[Image: {alt || "not downloaded — Pull from GitHub to retry"}]</span>;
+  return <img className="cached-image" src={`/api/media?${new URLSearchParams({url: src, v: String(revision)})}`} alt={alt || "Comment image"} loading="lazy" onError={() => setFailed(true)} />;
+}
+// Support GitHub's pasted <img> screenshots while keeping all other HTML disabled.
+function imageMarkdown(text: string) {
+  return text.replace(/<img\b[^>]*>/gi, tag => {
+    const match = /\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(tag);
+    const src = (match?.[1] || match?.[2] || match?.[3] || "").replace(/&amp;/g, "&");
+    return /^https:\/\//i.test(src) ? `![Attached image](<${src.replace(/</g, "%3C").replace(/>/g, "%3E")}>)` : "[Image unavailable offline]";
+  });
+}
 function Markdown({ text }: { text?: string | null }) {
   return (
     <div className="markdown">
@@ -67,11 +87,7 @@ function Markdown({ text }: { text?: string | null }) {
         remarkPlugins={[remarkGfm]}
         skipHtml
         components={{
-          img: ({ alt }) => (
-            <span className="image-placeholder">
-              [Image: {alt || "remote image unavailable offline"}]
-            </span>
-          ),
+          img: ({ src, alt }) => <CachedImage src={src} alt={alt} />,
           a: ({ href, children }) => (
             <a href={href} target="_blank" rel="noreferrer">
               {children}
@@ -79,7 +95,7 @@ function Markdown({ text }: { text?: string | null }) {
           ),
         }}
       >
-        {text || "_No description provided._"}
+        {imageMarkdown(text || "_No description provided._")}
       </ReactMarkdown>
     </div>
   );
@@ -210,8 +226,11 @@ function App() {
     if (!selected) return;
     setPulling(true); setError(""); setNotice(""); setNoticeWarning(false);
     try {
-      await api(repoUrl(selected) + "/sync", { method: "POST", body: "{}" });
-      setNotice("Pull completed. Your local copy is up to date; outgoing changes were not sent.");
+      const result = await api<{ images?: { downloaded?: number; failed?: number; error?: string } }>(repoUrl(selected) + "/sync", { method: "POST", body: "{}" });
+      window.dispatchEvent(new Event("ogh-images-pulled"));
+      const images = result.images;
+      const imageNotice = images ? images.error ? " Image caching failed; retry Pull." : ` Images: ${images.downloaded || 0} downloaded, ${images.failed || 0} unavailable.` : "";
+      setNotice("Pull completed. Your local copy is up to date; outgoing changes were not sent." + imageNotice);
       await loadRepos(); refreshOutbox();
     } catch (error) { setError((error as Error).message); }
     finally { setPulling(false); }

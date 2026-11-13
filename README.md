@@ -13,6 +13,7 @@ Your repositories, issues and pull requests at 35,000 feet. A **Rust + React + s
 ## ✨ What you get
 
 - 🗂️ Multiple repositories, searchable issues/PRs, discussions and local source browsing.
+- 🖼️ GitHub-hosted comment screenshots downloaded on Pull and displayed offline.
 - 🌳 Full Git history, branches, tags and available PR heads. Isolated worktrees for testing.
 - ✍️ Offline comments, issue/PR drafts, label changes and review drafts in a durable SQLite outbox.
 - 🟠 Visible pending, sending, conflicted, failed and uncertain markers beside local work.

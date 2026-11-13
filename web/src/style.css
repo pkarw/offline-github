@@ -1370,3 +1370,5 @@ textarea {
 .transfer-buttons { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
 
 .label-filter { max-width: 220px; min-width: 110px; background: var(--panel, #191919); color: inherit; border: 1px solid #383838; border-radius: 6px; padding: 8px; }
+
+.markdown .cached-image { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 12px 0; }

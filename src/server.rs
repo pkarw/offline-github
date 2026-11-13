@@ -68,6 +68,22 @@ async fn guard(headers: HeaderMap, request: axum::extract::Request, next: Next) 
 struct Add {
     full_name: String,
 }
+async fn image(State(s): State<Store>, Query(q): Query<HashMap<String, String>>) -> Response {
+    let Some(url) = q.get("url").cloned() else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    match tokio::task::spawn_blocking(move || crate::media::read(&s, &url)).await {
+        Ok(Ok((bytes, mime))) => (
+            [
+                ("content-type", mime),
+                ("cache-control", "private, max-age=3600"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
 async fn repos(State(s): State<Store>) -> ApiResult {
     blocking(move || Ok(json!(s.repos()?))).await
 }
@@ -310,6 +326,7 @@ pub async fn serve(
                 Json(json!({"status":"ok","mode":"offline_first","outgoing_queue":true,"desktop_launch":true,"separate_pull_push":true,"data_dir":s.root}))
             }),
         )
+        .route("/api/media", get(image))
         .route("/api/outbox", get(outgoing).post(queue))
         .route("/api/outbox/sync", post(send_outgoing))
         .route("/api/outbox/{id}/resolve", post(resolve_outgoing))

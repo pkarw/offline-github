@@ -62,6 +62,20 @@ with open(os.environ['DESKTOP_LOG'],'a') as f:f.write(json.dumps(sys.argv)+'\\n'
         def http(path, data=None):
             req=urllib.request.Request(url+path, data=json.dumps(data).encode() if data is not None else None, headers={'Content-Type':'application/json'})
             with urllib.request.urlopen(req, timeout=15) as response:return json.load(response)
+        # Cached attachments are served locally with verified MIME, never fetched by GET.
+        import hashlib, urllib.parse
+        source='https://github.com/user-attachments/assets/offline-fixture'
+        media=fixture.d/'cache/media'
+        media.mkdir()
+        png=b'\x89PNG\r\n\x1a\nfixture'
+        (media/hashlib.sha256(source.encode()).hexdigest()).write_bytes(png)
+        with urllib.request.urlopen(url+'/api/media?'+urllib.parse.urlencode({'url':source}),timeout=5) as image:
+            assert image.read()==png and image.headers['Content-Type']=='image/png'
+        for source in ('https://example.invalid/missing.png','../../snapshot.json'):
+            try:
+                urllib.request.urlopen(url+'/api/media?'+urllib.parse.urlencode({'url':source}),timeout=5)
+                raise AssertionError('Missing attachment unexpectedly available')
+            except urllib.error.HTTPError as error: assert error.code==404
         snapshot=fixture.d/'cache/test/repo/snapshot.json'
         data=json.loads(snapshot.read_text())
         data['items']['1']['labels']=[{'name':'bug','color':'ff0000'}]

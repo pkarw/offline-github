@@ -24,6 +24,8 @@ const fs=require('fs');const path=require('path');
  await page.screenshot({path:path.join(artifacts,'local-launcher.png')});
  await page.getByRole('button',{name:'Push changes',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('No outgoing changes to push');await expect(page.getByRole('button',{name:'Push 0 outgoing changes',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await expect(page.locator('.item-row').first()).toBeVisible({timeout:20000});await page.locator('.item-row').first().click();
+ await expect(page.locator('.cached-image')).toHaveCount(2);
+ await expect.poll(()=>page.locator('.cached-image').evaluateAll(images=>images.every(img=>img.complete && img.naturalWidth===1))).toBe(true);
  await page.getByLabel('Add a comment to the local queue').fill('Offline browser notes: preserve this comment.');
  await page.reload();await expect(page.locator('.item-row').first()).toBeVisible();await page.locator('.item-row').first().click();
  await expect(page.getByLabel('Add a comment to the local queue')).toHaveValue('Offline browser notes: preserve this comment.');

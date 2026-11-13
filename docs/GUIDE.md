@@ -193,3 +193,20 @@ Bare `--json` retains legacy raw ogh output; `--json number,title,…` returns g
 - GraphQL/arbitrary REST passthrough and generic REST mutations are unsupported. Use named local queue commands; only explicit preparation/sync goes online.
 - Server binds to localhost with Host/Origin checks and CSP. Keep it local: caches/reports can contain private source, discussions and unpublished work.
 - There is no service worker: the local Rust server must be running. GitHub is not a transactional store across multiple operations; the ledger shows each confirmed, pending or unresolved result separately.
+
+## Offline images 🖼️
+
+**Pull from GitHub** (or `ogh sync -R owner/repo`) downloads images embedded in
+issue/PR descriptions, comments, inline review comments and cached reviews. It
+scans existing cached conversations too, so upgrading needs no full resync.
+Markdown images, reference images and GitHub HTML `<img>` screenshots are supported.
+The original comment body stays unchanged. Images are stored under
+`~/.offline-github/media`; the web UI reads only local files, never remote images.
+
+Downloads support HTTPS GitHub attachment/image hosts and PNG, JPEG, GIF, WebP
+and AVIF, up to 20 MiB each. SVG, external image hosts and images requiring a
+separate authenticated session are not downloaded. Pull continues when an image
+fails; the sync JSON includes image counts and failures. Each repo also retains
+`image-report.json` beside its snapshot. Missing images are retried on the next
+Pull (image downloads have a two-minute budget per pull). Cached images are
+retained when a repository is removed from the app.

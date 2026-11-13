@@ -6,6 +6,14 @@ import test_outbox
 root=pathlib.Path(__file__).resolve().parents[1]
 fixture=test_outbox.OutboxTests();fixture.setUp();server=None
 try:
+ import base64,hashlib
+ source='https://github.com/user-attachments/assets/offline-image-fixture'
+ media=fixture.d/'cache/media';media.mkdir()
+ (media/hashlib.sha256(source.encode()).hexdigest()).write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aFOsAAAAASUVORK5CYII='))
+ snapshot=fixture.d/'cache/test/repo/snapshot.json'
+ data=json.loads(snapshot.read_text())
+ data['details']['1']['item']['body']='![Offline screenshot]('+source+')\n\n<img src="'+source+'" width="100" />'
+ snapshot.write_text(json.dumps(data))
  with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
  url=f'http://127.0.0.1:{port}'
  log=(fixture.d/'server.log').open('w')
