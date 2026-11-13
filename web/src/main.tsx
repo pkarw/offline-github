@@ -285,7 +285,7 @@ function App() {
             the source of truth.
           </p>
           <span className="version">
-            READ-ONLY WORKSPACE <span>v1.0</span>
+            READ-ONLY WORKSPACE <span>v0.1</span>
           </span>
         </div>
       </aside>
@@ -658,6 +658,7 @@ function ItemDetail({
           ))}
         </Tabs.Content>
         <Tabs.Content value="reviews">
+          {d.reviews_cached === false && d.reviews.length > 0 && <p className="muted">Review summaries may be stale. Run ogh sync -R {repo} --reviews to refresh them.</p>}
           {!d.reviews.length && !d.review_comments.length && (
             <Empty title="No reviews cached">
               Run ogh sync -R {repo} --reviews to download review summaries.

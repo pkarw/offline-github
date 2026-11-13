@@ -17,7 +17,7 @@ fn pages(endpoint: &str) -> Result<Vec<Value>> {
     let raw = run(
         "gh",
         &["api", "--method", "GET", "--paginate", "--slurp", endpoint],
-        300,
+        1800,
     )?;
     let pages: Vec<Vec<Value>> = serde_json::from_str(&raw)?;
     Ok(pages.into_iter().flatten().collect())

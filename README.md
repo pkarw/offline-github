@@ -4,6 +4,8 @@
 
 A local GitHub reading desk built with **Rust + React + shadcn/ui**. Sync before boarding, browse discussions in airplane mode, and check out a PR to test it locally. GitHub stays the source of truth.
 
+![Offline GitHub workspace](docs/screenshots/workspace.png)
+
 > 🚧 Early release. This is an independent offline client, not affiliated with GitHub.
 
 ## ✨ What you get
@@ -40,6 +42,15 @@ ogh serve --web-dir "$PWD/web/dist"
 Open **http://127.0.0.1:4173**. Keep the local Rust server running while browsing offline. Every UI asset is served locally; no CDN, remote fonts or avatar requests are required.
 
 The first sync downloads **all issues/PR metadata and conversations**, plus full Git history, and can take several minutes and significant disk space on large repositories. Later syncs request changed issues/comments and incrementally fetch Git objects. The PR endpoint has no `since` filter, so its update-sorted pages are scanned only as far as the last sync window.
+
+<details>
+<summary>📸 Pull requests, source browser and mobile</summary>
+
+![PR diff](docs/screenshots/pull-request.png)
+![Local source browser](docs/screenshots/source.png)
+<img src="docs/screenshots/mobile.png" width="320" alt="Mobile workspace" />
+
+</details>
 
 ## 🤖 Agent-friendly CLI
 
@@ -81,6 +92,7 @@ Data defaults to your OS's local application-data directory (`~/Library/Applicat
 - Deleted issues/comments are not reported by GitHub's delta feeds. Run `--full` periodically to remove stale cached records. The UI sync button runs the default delta sync.
 - Git LFS payloads, submodule repositories, release assets, Actions logs/checks, attached images and linked websites are not downloaded. Markdown attachments need connectivity; source and text remain local.
 - PR file names and diffs are derived locally. The UI diff is capped at 4 MB and file previews at 2 MB; `ogh pr diff` outputs the full patch. Unavailable historical base/head objects produce a visible diff error.
+- Upstream branches refresh under `refs/remotes/origin/*`; browse `HEAD` or `origin/main` for the latest upstream code. Local branch refs are preserved so sync cannot overwrite your commits.
 - No background network sync or service worker. The local server is required. Existing local working changes are never uploaded or overwritten.
 - `ogh` intentionally supports the documented read-only subset of `gh`; it is not a drop-in replacement for every `gh` command.
 - Local HTTP only, bound to `127.0.0.1`, with host/origin checks. Do not expose the server through a proxy to other machines: caches may contain private source and discussions.
@@ -94,6 +106,6 @@ ogh serve --web-dir "$PWD/web/dist"
 cd web && npm run dev
 ```
 
-The backend is Axum, Clap and a versioned-on-disk JSON snapshot per project; Git is invoked directly without a shell. API calls go through authenticated `gh api --method GET`. API contract: [docs/API.md](docs/API.md).
+The backend is Axum, Clap and an atomic on-disk JSON snapshot per project; Git is invoked directly without a shell. API calls go through authenticated `gh api --method GET`. API contract: [docs/API.md](docs/API.md).
 
 **License:** [MIT](LICENSE) · Made for long flights and focused work ☁️
