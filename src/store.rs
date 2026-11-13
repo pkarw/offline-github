@@ -140,7 +140,12 @@ impl Store {
     }
     pub fn items(&self, repo: &str, kind: &str, state: &str, query: &str) -> Result<Vec<Value>> {
         let s = self.load(repo)?;
-        let q = query.to_lowercase();
+        let q = query.trim().to_lowercase();
+        let numeric = q
+            .strip_prefix('#')
+            .or_else(|| q.strip_prefix("number:"))
+            .unwrap_or(&q);
+        let exact_number = !numeric.is_empty() && numeric.bytes().all(|c| c.is_ascii_digit());
         let mut out: Vec<_> = s
             .items
             .values()
@@ -148,9 +153,13 @@ impl Store {
                 (kind == "all" || (v.get("pull_request").is_some()) == (kind == "pr"))
                     && (state == "all" || v["state"] == state)
                     && (q.is_empty()
-                        || format!("{} {} {}", v["title"], v["body"], v["number"])
-                            .to_lowercase()
-                            .contains(&q))
+                        || if exact_number {
+                            v["number"].as_u64() == numeric.parse::<u64>().ok()
+                        } else {
+                            format!("{} {} {}", v["title"], v["body"], v["number"])
+                                .to_lowercase()
+                                .contains(&q)
+                        })
             })
             .cloned()
             .collect();
@@ -216,7 +225,7 @@ mod tests {
         let mut s = store.load("a/b").unwrap();
         s.items.insert(
             1,
-            json!({"number":1,"title":"Fix Sync","state":"open","updated_at":"2026-01-01"}),
+            json!({"number":1,"title":"Fix Sync 12","state":"open","updated_at":"2026-01-01"}),
         );
         s.items.insert(2,json!({"number":2,"title":"PR","state":"closed","pull_request":{},"updated_at":"2026-01-02"}));
         store.save(&s).unwrap();
@@ -225,6 +234,11 @@ mod tests {
             1
         );
         assert_eq!(store.items("a/b", "pr", "open", "").unwrap().len(), 0);
+        for query in ["1", "#1", "number:1"] {
+            assert_eq!(store.items("a/b", "issue", "all", query).unwrap().len(), 1);
+        }
+        assert!(store.items("a/b", "issue", "all", "12").unwrap().is_empty());
+        assert_eq!(store.items("a/b", "pr", "all", "#2").unwrap().len(), 1);
         assert_eq!(store.repos().unwrap()[0]["pr_count"], 1);
     }
 }

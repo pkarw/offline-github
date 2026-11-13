@@ -30,7 +30,37 @@ def configure(workspace, skills, source, repository='open-mercato/open-mercato')
     config['tracker'] = 'offline-github'
     write(config_path, json.dumps(config, indent=2) + '\n')
     write(ai / 'trackers/offline-github.md', (source / 'docs/trackers/offline-github.md').read_text())
-    instruction = '''\n## Offline workspace transport (installed by ogh setup)\n\nRead `.ai/trackers/offline-github.md` before tracker operations. Use `ogh`, never\n`gh`, for this workspace's issue/PR/cache/queue operations, even when examples\nbelow show `gh`. Use the descriptor's REST alternative for GraphQL commit counts.\nDo not fall back to online GitHub calls for unsupported operations. Missing or\nstale cached data is a gap; queued writes are intentions, not live receipts.\nA mandatory live claim, merge, permission or publication gate must stop offline.\nContinue only the explicitly requested local preparation/coding/test work.\nNative local Git is available. Outgoing publication requires reviewed Sync.\n\n'''
+    instruction = '''
+## Offline workspace transport (installed by ogh setup)
+
+Read `.ai/trackers/offline-github.md` before tracker operations. Use `ogh`, never
+`gh`, for this workspace's issue/PR/cache/queue operations, even when examples
+below show `gh`. Use the descriptor's REST alternative for GraphQL commit counts.
+
+Supported writes ARE available offline: queue comments with `ogh issue comment
+NUMBER --body-file FILE` (or `ogh pr comment`); queue label changes with
+`ogh issue edit NUMBER --add-label NAME --remove-label OTHER` (or `ogh pr edit`);
+create repository labels with `ogh label create NAME --color aabbcc`. Issue/PR
+creation, PR reviews and branch publication also have dedicated ogh commands.
+Translate supported REST write examples into these high-level commands; `ogh api`
+is read-only. Pass `-R owner/repo` explicitly. Do not say comments/labels are
+impossible merely because this workspace uses the offline provider.
+
+Queuing saves a durable local intention; it does not update GitHub immediately.
+When online and publication is authorized, run `ogh outbox sync --dry-run`, inspect
+the outgoing payloads, then `ogh outbox sync --yes --plan-token TOKEN` using the
+returned plan_token. The UI calls this Push. `ogh sync` is incoming Pull only.
+Use `ogh outbox report --format json` or `--format md` for recovery and audit.
+Only an applied event with a GitHub receipt confirms publication. Preserve and
+report pending/conflict/uncertain events; never blindly repost uncertain writes.
+
+Do not fall back to real gh for unsupported operations. Missing or stale cached
+data is a gap. A mandatory live claim, atomic lock, merge or permission gate still
+requires live verification and must stop offline; queued comments/labels cannot
+satisfy it. Native local Git branches, commits and explicitly requested local
+preparation/coding/tests remain available.
+
+'''
     installed = []
     for skill in sorted((skills / 'skills').iterdir()):
         if not (skill / 'SKILL.md').is_file():

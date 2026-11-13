@@ -1,7 +1,7 @@
 # Tracker provider: Offline GitHub (ogh)
 
-This is an explicit **offline preparation and outgoing-queue provider**, not an online
-GitHub provider and not authorization to bypass any skill's claim/QA/merge gate.
+This provider supports **offline reads, durable queued writes, and reviewed online
+Push**. It does not bypass any skill's claim/QA/merge gate.
 Use it for local analysis, specifications, reviews saved locally, code changes,
 local tests, and explicitly queued outgoing intentions. GitHub remains master. Do not replace `gh` globally or alias it:
 `ogh sync` and `ogh skills prepare` use the real authenticated `gh` while online.
@@ -58,16 +58,35 @@ PR heads, not every Actions run in the repository.
 
 ## Queued write operations (local intent, not remote tracker state)
 
-The app now supports durable intentions through `ogh issue comment/create/edit`,
-`ogh pr comment/create/edit/review`, `ogh label create`, and `ogh branch publish`.
-These commands return a local event, not a GitHub issue URL or claim receipt.
-`issue edit --add-label/--remove-label` stages label deltas; field edits preserve
-proposals under the default no-overwrite policy. `ogh outbox report --format
-json|md` exposes all payloads, conflicts, receipts and audit history.
+Comments and labels **are supported offline**. Translate skill examples that use
+`gh` or mutating REST requests into these dedicated commands; `ogh api` is read-only.
+Pass `-R owner/repo` on every command (or set `OGH_REPO`).
 
-Only reviewed `ogh outbox sync --yes` / the UI's explicit Sync confirmation sends
-outgoing work. It reconciles uncertain results before any retry; unconfirmed
-results remain visible. Read [the outgoing contract](../OUTBOX.md).
+| Outgoing operation | Queue locally |
+| --- | --- |
+| Comment on an issue / PR | `ogh issue comment NUMBER --body-file FILE` / `ogh pr comment NUMBER --body-file FILE` |
+| Add / remove issue or PR labels | `ogh issue edit NUMBER --add-label NAME --remove-label OTHER` / `ogh pr edit NUMBER --add-label NAME` |
+| Create repository label | `ogh label create NAME --color aabbcc --description 'Description'` |
+| Create issue | `ogh issue create --title TITLE --body-file FILE` |
+| Create PR | `ogh pr create --title TITLE --body-file FILE --head BRANCH --base main` |
+| Submit PR review | `ogh pr review NUMBER --comment --body-file FILE` (also `--approve` / `--request-changes`; approval still requires the skill's review gates) |
+| Publish local branch | `ogh branch publish BRANCH` (no force push) |
+| Propose title/body/state edit | `ogh issue edit NUMBER --title TITLE` / `ogh pr edit NUMBER --title TITLE` (safe proposal; never silently overwrites upstream fields) |
+
+These commands return local intentions, not live GitHub receipts. Field edits
+preserve proposals under the default no-overwrite policy. To publish when online
+and authorized:
+
+1. Run `ogh outbox sync --dry-run -R owner/repo` and inspect every outgoing payload.
+2. Use its `plan_token`: `ogh outbox sync --yes --plan-token TOKEN -R owner/repo`.
+3. Inspect the returned statuses and GitHub receipts. Unresolved conflicts and
+   uncertain results remain queued for explicit recovery, not blind resending.
+
+The UI calls this **Push**; **Pull** (`ogh sync`) downloads incoming GitHub data
+and does not publish the queue. `ogh outbox report --format json` or `--format md`
+exports payloads, conflicts, receipts and audit history for recovery. Read
+[the outgoing contract](../OUTBOX.md). Do not claim these supported writes are
+unavailable merely because the workspace uses this provider.
 
 Queued assignment/labels/comments never satisfy a mandatory LIVE claim step.
 Do not report a PR published, review submitted or issue created until its event
@@ -81,12 +100,13 @@ REST commit total, and paginated `/pulls/NUMBER/commits` for identities. Prepara
 asserts count equality. Replace the skill's narrow GraphQL total-count lookup
 with this explicit offline alternative; arbitrary GraphQL is not emulated.
 
-## Operations that require live GitHub
+## Unsupported live operations
 
 Do not run acquire/release-lock, claim-reset/winner/withdraw, assign/unassign,
 ready/merge PRs,
-approve/rerun/watch workflows, image/session publication, pushes or branch
-protection changes through this provider. There is no local lock emulation. The outgoing queue does not authorize these
+approve/rerun/watch workflows, image/session publication or branch
+protection changes through this provider. Branch publication is supported through
+the reviewed outgoing queue described above. There is no local lock emulation. The outgoing queue does not authorize these
 live-only operations or make queued intentions remotely visible. If a skill requires one of these operations before
 implementation, stop that workflow and do explicitly requested local preparation
 instead. Save findings/patches locally and resume the actual skill online.

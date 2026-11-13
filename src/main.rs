@@ -287,7 +287,7 @@ enum SkillsCommand {
         #[arg(long)]
         pr: Option<u64>,
     },
-    /// Print the read-only tracker-provider descriptor for agents
+    /// Print the offline reads and reviewed outgoing writes descriptor for agents
     Provider,
 }
 

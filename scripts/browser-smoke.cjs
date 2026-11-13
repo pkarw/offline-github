@@ -23,11 +23,21 @@ const fs=require('fs');const path=require('path');
  if(launched?.tool!=='codex'||launched?.path!==launchPath)throw Error('Wrong launch target');
  await page.screenshot({path:path.join(artifacts,'local-launcher.png')});
  await page.getByRole('button',{name:'Push changes',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('No outgoing changes to push');await expect(page.getByRole('button',{name:'Push 0 outgoing changes',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Cancel',exact:true}).click();
- await expect(page.locator('.item-row').first()).toBeVisible({timeout:20000});await page.locator('.item-row').first().click();
+ // Numeric searches include closed items, match exactly and Enter opens either kind.
+ const search=page.getByLabel('Search cached items');
+ await search.fill('#12');await expect(page.locator('.item-row')).toHaveCount(1);await expect(page.locator('.item-row')).toContainText('Fixture 12');
+ await search.press('Enter');await expect(page).toHaveURL(base+'/test/repo/issues/12');
+ await page.reload();await expect(page.getByLabel('Add a comment to the local queue')).toBeVisible();await expect(page).toHaveURL(base+'/test/repo/issues/12');
+ await page.goBack();await expect(page).toHaveURL(base+'/test/repo/issues');
+ await page.goForward();await expect(page).toHaveURL(base+'/test/repo/issues/12');
+ await page.goto(base+'/test/repo/issues');await search.fill('2');await search.press('Enter');await expect(page).toHaveURL(base+'/test/repo/pull/2');
+ await page.reload();await expect(page.getByLabel('Add a comment to the local queue')).toBeVisible();await expect(page).toHaveURL(base+'/test/repo/pull/2');
+ await page.goto(base+'/test/repo/issues/1');await expect(page.getByLabel('Add a comment to the local queue')).toBeVisible();
+
  await expect(page.locator('.cached-image')).toHaveCount(2);
  await expect.poll(()=>page.locator('.cached-image').evaluateAll(images=>images.every(img=>img.complete && img.naturalWidth===1))).toBe(true);
  await page.getByLabel('Add a comment to the local queue').fill('Offline browser notes: preserve this comment.');
- await page.reload();await expect(page.locator('.item-row').first()).toBeVisible();await page.locator('.item-row').first().click();
+ await page.reload();await expect(page.getByLabel('Add a comment to the local queue')).toBeVisible();
  await expect(page.getByLabel('Add a comment to the local queue')).toHaveValue('Offline browser notes: preserve this comment.');
  // Commit locally, lose the local HTTP reply, then retry the same client UUID.
  let dropReply=true;const incomingPulls=[];
@@ -41,7 +51,7 @@ const fs=require('fs');const path=require('path');
  await page.getByRole('button',{name:'Queue comment',exact:true}).click();
  await expect(page.locator('.local-comment')).toContainText('Offline browser notes',{timeout:15000});
  await expect(page.locator('.local-comment')).toContainText('pending');
- await page.reload();await expect(page.locator('.item-row').first()).toBeVisible();await page.locator('.item-row').first().click();await expect(page.locator('.local-comment')).toContainText('Offline browser notes');
+ await page.reload();await expect(page.getByLabel('Add a comment to the local queue')).toBeVisible();await expect(page.locator('.local-comment')).toContainText('Offline browser notes');
  await page.getByRole('button',{name:'Add / remove labels',exact:true}).click();await page.getByRole('dialog').getByLabel('Add',{exact:true}).fill('airplane');await page.getByRole('dialog').getByRole('button',{name:'Queue change'}).click();
  await expect(page.locator('.queued-field')).toContainText('airplane');
  await page.getByRole('button',{name:/Outgoing/}).click();await expect(page.locator('.queue-card')).toHaveCount(2);await page.screenshot({path:path.join(artifacts,'outgoing-pending.png')});
@@ -72,6 +82,6 @@ const fs=require('fs');const path=require('path');
  await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.repo-link')).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(300);if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Outgoing mobile horizontal overflow');await page.screenshot({path:path.join(artifacts,'outgoing-mobile.png')});
  if(errors.length||external.length)throw Error(JSON.stringify({errors,external}));
- console.log(JSON.stringify({passed:['HTTP enqueue with lost local reply idempotency','unsubmitted browser draft recovery','pending comment/label markers','reload durability','JSON/MD downloads','bound preview and explicit fake send','applied history','confirmed comment deduplication','remote conflict preserved','mobile layout','no external requests'],errors,external},null,2));
+ console.log(JSON.stringify({passed:['exact number search including closed items','issue and PR deep links, reload, back and forward','HTTP enqueue with lost local reply idempotency','unsubmitted browser draft recovery','pending comment/label markers','reload durability','JSON/MD downloads','bound preview and explicit fake send','applied history','confirmed comment deduplication','remote conflict preserved','mobile layout','no external requests'],errors,external},null,2));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

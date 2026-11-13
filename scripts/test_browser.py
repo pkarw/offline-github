@@ -13,6 +13,11 @@ try:
  snapshot=fixture.d/'cache/test/repo/snapshot.json'
  data=json.loads(snapshot.read_text())
  data['details']['1']['item']['body']='![Offline screenshot]('+source+')\n\n<img src="'+source+'" width="100" />'
+ for number,is_pr in [(12,False),(120,False),(2,True)]:
+  item=dict(data['items']['1'],number=number,title=f'Fixture {number}',state='closed')
+  if is_pr:item['pull_request']={}
+  data['items'][str(number)]=item
+  data['details'][str(number)]={'item':item,'comments':[],'reviews':[],'review_comments':[],'files':[],'diff':''}
  snapshot.write_text(json.dumps(data))
  with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
  url=f'http://127.0.0.1:{port}'

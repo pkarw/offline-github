@@ -144,7 +144,12 @@ impl Search {
                     _ => false,
                 }
             } else {
-                haystack.contains(&term.trim_start_matches('#').to_lowercase())
+                let plain = term.trim_start_matches('#');
+                if !plain.is_empty() && plain.bytes().all(|c| c.is_ascii_digit()) {
+                    item["number"].as_u64() == plain.parse::<u64>().ok()
+                } else {
+                    haystack.contains(&plain.to_lowercase())
+                }
             };
             if matched == negative {
                 return Ok(false);
@@ -172,5 +177,21 @@ mod tests {
             .unwrap());
         assert!(Search::parse("review:approved").is_err());
         assert!(Search::parse("foo OR bar").is_err());
+    }
+    #[test]
+    fn numbers_are_exact_not_title_or_substring_matches() {
+        let item = json!({"number":123,"title":"Fix 12 and #456"});
+        for query in ["123", "#123", "number:123"] {
+            assert!(Search::parse(query)
+                .unwrap()
+                .matches(&item, None, "o/r")
+                .unwrap());
+        }
+        for query in ["12", "#12", "456", "#456", "number:12"] {
+            assert!(!Search::parse(query)
+                .unwrap()
+                .matches(&item, None, "o/r")
+                .unwrap());
+        }
     }
 }

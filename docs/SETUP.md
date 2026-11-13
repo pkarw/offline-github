@@ -23,6 +23,13 @@ project's `.ai/agentic.config.json`. It installs project-scoped skills in the
 Claude, Codex and pi discovery directories. Skills carry an explicit ogh
 transport instruction; the real `gh` binary is not replaced or aliased.
 
+Agents can queue comments and labels **while offline** using `ogh issue comment`,
+`ogh pr comment`, `ogh issue edit --add-label/--remove-label`, and `ogh label create`.
+The installed skill instructions explain the mapping from `gh`/REST examples and
+how to preview and Push online with `ogh outbox sync --dry-run`, then
+`ogh outbox sync --yes --plan-token TOKEN`. Queueing is not a publication receipt.
+See the [agent command table](trackers/offline-github.md#queued-write-operations-local-intent-not-remote-tracker-state).
+
 It starts `ogh serve` in the background and verifies its health endpoint before
 reporting success. Your browser opens at the actual local URL (normally http://127.0.0.1:4173). The server PID and output are in
 `~/.offline-github/setup/server.pid` and `server.log`. Stop only that PID when
@@ -32,7 +39,7 @@ still identifies your server). Restart with `ogh serve`.
 ## Prerequisites
 
 - **macOS Apple Silicon:** Homebrew; missing Git, GitHub CLI, jq, Python and Node
-  22 are installed using Brew. The app uses the checksummed v0.2.4 binary bundle,
+  22 are installed using Brew. The app uses the checksummed v0.2.5 binary bundle,
   so Rust is unnecessary.
 - **Other macOS/Linux:** Git, curl, GitHub CLI, jq, Python 3, Node.js 22+ and its
   npm, plus a native C build toolchain, pkg-config and OpenSSL development files.

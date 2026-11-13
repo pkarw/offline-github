@@ -2,10 +2,10 @@
 
 [← All Docs](README.md) · [Getting started](../README.md#getting-started--one-command)
 
-`ogh` v0.2.4 implements a focused subset of GitHub CLI commands for offline work.
+`ogh` v0.2.5 implements a focused subset of GitHub CLI commands for offline work.
 It is not a drop-in replacement for every `gh` command or flag. GitHub remains
 the source of truth. **Cached** means data from the last sync/preparation;
-**queued** means a durable local intention until reviewed Sync confirms delivery.
+**queued** means a durable local intention until reviewed Push confirms delivery.
 
 | Feature / command family | gh | ogh | Practical difference |
 | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ ogh skills status -R open-mercato/open-mercato --pr 123
 Replace `123` with the PR you plan to work on. Install project dependencies,
 services and agent tools separately while online. Read-only commands do not
 silently fall back to GitHub. Sending queued changes requires explicit reviewed
-outbox Sync; ordinary incoming sync does not publish your work.
+outbox Push; ordinary incoming Pull does not publish your work.
 
 Command/field details: [offline tracker adapter](trackers/offline-github.md),
 [skill operation audit](skills-compatibility.md), [outgoing safety](OUTBOX.md).

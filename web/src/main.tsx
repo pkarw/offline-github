@@ -29,6 +29,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "./ui";
+import { readRoute, routePath, numberQuery, type Route } from "./navigation";
 import {
   api,
   repoUrl,
@@ -124,15 +125,16 @@ function ErrorBox({ error }: { error: string }) {
   );
 }
 function App() {
+  const [initialRoute] = useState(readRoute);
   const [repos, setRepos] = useState<Repo[]>([]),
-    [selected, setSelected] = useState(""),
-    [page, setPage] = useState("issue"),
+    [selected, setSelected] = useState(initialRoute.repo),
+    [page, setPage] = useState(initialRoute.page),
     [items, setItems] = useState<Item[]>([]),
     [state, setState] = useState("open"),
     [query, setQuery] = useState(""),
     [label, setLabel] = useState(""),
     [labels, setLabels] = useState<string[]>([]),
-    [number, setNumber] = useState<number | null>(null),
+    [number, setNumber] = useState<number | null>(initialRoute.number),
     [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -149,6 +151,16 @@ function App() {
   const [outbox, setOutbox] = useState<Outbox>({ events: [], counts: {} });
   const [preview, setPreview] = useState<Outbox | null>(null);
   const [previewRepo, setPreviewRepo] = useState("");
+  function navigate(route: Route, replace = false) {
+    const path = routePath(route);
+    if (window.location.pathname !== path) window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    setSelected(route.repo); setPage(route.page); setNumber(route.number);
+  }
+  useEffect(() => {
+    const restore = () => { const route = readRoute(); setSelected(route.repo); setPage(route.page); setNumber(route.number); setError(""); };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   const refreshOutbox = () => setVersion((v) => v + 1);
   useEffect(() => { setOutbox({ events: [], counts: {} }); }, [selected]);
   useEffect(() => {
@@ -168,7 +180,14 @@ function App() {
   async function loadRepos() {
     const data = await api<Repo[]>("/api/repos");
     setRepos(data);
-    setSelected((s) => data.some(r => r.full_name === s) ? s : data[0]?.full_name || "");
+    const current = readRoute();
+    if (data.some(r => r.full_name === current.repo)) {
+      navigate(current, true);
+    } else if (current.repo && !repos.length && data.length) {
+      setError(`Repository ${current.repo} is not in your offline workspace. Add it to open this link.`);
+    } else {
+      navigate({ repo: data[0]?.full_name || "", page: "issue", number: null }, true);
+    }
   }
   useEffect(() => {
     loadRepos()
@@ -182,7 +201,7 @@ function App() {
     setError("");
     const t = setTimeout(() => {
       api<Item[]>(
-        `${repoUrl(selected)}/items?${new URLSearchParams({ kind: page, state, q: query, label })}`,
+        `${repoUrl(selected)}/items?${new URLSearchParams({ kind: page, state: numberQuery(query) ? "all" : state, q: query, label })}`,
       )
         .then((d) => {
           if (current) setItems(d);
@@ -222,6 +241,14 @@ function App() {
       current = false;
     };
   }, [selected, number, version]);
+  async function openSearchNumber() {
+    if (!numberQuery(query) || !selected) return;
+    const target = Number(query.trim().replace(/^(?:#|number:)/, ""));
+    try {
+      const result = await api<Detail>(`${repoUrl(selected)}/items/${target}`);
+      navigate({ repo: selected, page: result.item.pull_request ? "pr" : "issue", number: target });
+    } catch (error) { setError((error as Error).message); }
+  }
   async function pull() {
     if (!selected) return;
     setPulling(true); setError(""); setNotice(""); setNoticeWarning(false);
@@ -290,8 +317,7 @@ function App() {
         body: JSON.stringify({ full_name: newRepo.trim() }),
       });
       await loadRepos();
-      setSelected(r.full_name);
-      setNumber(null);
+      navigate({ repo: r.full_name, page: "issue", number: null });
       setAddOpen(false);
       setNewRepo("");
       setNoticeWarning(false);
@@ -335,8 +361,7 @@ function App() {
                 "repo-link " + (selected === r.full_name ? "active" : "")
               }
               onClick={() => {
-                setSelected(r.full_name);
-                setNumber(null);
+                navigate({ repo: r.full_name, page, number: null });
                 setError("");
                 setNotice("");
     setNoticeWarning(false);
@@ -462,8 +487,7 @@ function App() {
                       key={String(id)}
                       className={page === id ? "selected" : ""}
                       onClick={() => {
-                        setPage(String(id));
-                        setNumber(null);
+                        navigate({ repo: selected, page: String(id), number: null });
                         setError("");
                       }}
                     >
@@ -490,7 +514,7 @@ function App() {
               ) : number !== null ? (
                 <>
                   {
-                    <Button variant="ghost" onClick={() => setNumber(null)}>
+                    <Button variant="ghost" onClick={() => navigate({ repo: selected, page, number: null })}>
                       <ArrowLeft size={15} /> Back to{" "}
                       {page === "pr" ? "pull requests" : "issues"}
                     </Button>
@@ -554,7 +578,8 @@ function App() {
                       <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder={`Search ${page === "pr" ? "pull requests" : "issues"}…`}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void openSearchNumber(); } }}
+                        placeholder={`Search ${page === "pr" ? "pull requests" : "issues"} or #number…`}
                         aria-label="Search cached items"
                       />
                       {query && (
@@ -585,7 +610,7 @@ function App() {
                         <button
                           className="item-row"
                           key={i.number}
-                          onClick={() => setNumber(i.number)}
+                          onClick={() => navigate({ repo: selected, page: i.pull_request ? "pr" : "issue", number: i.number })}
                         >
                           {page === "pr" ? (
                             <GitPullRequest
