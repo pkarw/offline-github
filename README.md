@@ -80,6 +80,44 @@ The app opens at **http://127.0.0.1:4183**. Return later with
 > Skills use cached reads and queued writes through `ogh`; live-only claim/merge
 > gates stop offline. Agents are installed/authenticated separately. No global `gh` alias.
 
+## ⬆️ Upgrade an existing installation
+
+Keep your existing repositories: **do not delete `~/.offline-github` or your
+project folders**. First stop the running `ogh serve` with **Ctrl-C** in its
+terminal. If setup started it in the background, check the PID in
+`~/.offline-github/setup/server.pid` with `ps -p PID -o pid=,command=`, then
+stop that specific process with `kill PID` once confirmed as your ogh server.
+This ensures the browser uses the updated backend rather than a reused server.
+
+For the default Open Mercato installation, paste:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/pkarw/offline-github/main/scripts/setup.sh) --repo open-mercato/open-mercato --folder "$HOME/Projects/open-mercato-offline" --skip-sync --no-shell
+~/.local/bin/ogh --version
+```
+
+📂 Replace `--repo` and `--folder` with the repository and **existing managed
+workspace** you selected during setup. If you used `OGH_DATA_DIR` or
+`OGH_SETUP_ROOT`, export those same values before upgrading. One run updates the
+shared CLI and UI for **all cached repositories**; it also refreshes managed agent
+instructions in the selected workspace and updates `ogh-work` to enter it.
+
+💾 Cached issues, PRs, images, outgoing history, queued changes, local commits
+and worktrees remain in place. `--skip-sync` skips the repository download;
+upgrading does **not Push** queued work. The installer opens the updated browser
+app and prints its actual URL. Refresh any old browser tabs. Use **Pull from
+GitHub** separately when you want fresh repository data.
+
+🧊 **Microsandbox:** enter your existing VM with `~/.local/bin/ogh-sandbox`, stop
+its ogh server, then run the same setup command **inside the guest**, using
+`--folder /root/Projects/open-mercato-offline` (or your existing guest folder)
+and prefixing it with `OGH_SETUP_PORT=4174`. Keep the same VM and persistent
+volume; exit and run `~/.local/bin/ogh-sandbox` again to reopen it.
+
+🛠️ **Installed from a source checkout?** In that checkout, run `git pull --ff-only`
+then `bash scripts/install.sh`, and restart `ogh serve`. This requires the
+[source-build prerequisites](docs/SETUP.md#prerequisites).
+
 ## 📚 Docs
 
 - [Setup options, prerequisites and troubleshooting](docs/SETUP.md)
